@@ -4,6 +4,7 @@ build/
 *.aab
 *.keystore
 *.jks
+keystore/
 local.properties
 .idea/
 *.iml
