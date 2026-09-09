@@ -8,3 +8,5 @@ local.properties
 .idea/
 *.iml
 .DS_Store
+cleaner.py
+gk_songs.json
