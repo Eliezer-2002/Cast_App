@@ -6,20 +6,61 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{width:100%;height:100%;background:#000;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%;}
-#screen{
-  position:fixed;inset:0;
-  display:flex;flex-direction:column;
-  background:#000;
+/* #screen is just a plain full-viewport wrapper around two independent, stacked
+   layers — see LAYER ARCHITECTURE below. It owns no grid/background of its own
+   any more (each layer owns its own). */
+#screen{position:fixed;inset:0;}
+
+/* ══════════════════════════════════════
+   LAYER ARCHITECTURE — Sources, Songs and Bible used to all share one flat
+   #screen (whichever function ran last won, hiding/overwriting whatever the
+   others had drawn). They're now two independent, always-present layers:
+     #sources-layer  (z-index 1) — the PERMANENT base layer. Only showGap()/
+       showCamera()/showPdf()/clearDisplay() ever touch it (clock, blank,
+       custom text, image, video, USB/capture camera, PDF — i.e. Sources).
+     #overlay-layer   (z-index 2) — drawn on TOP of Sources. Only showContent()/
+       showSplit()/clearOverlay() ever touch it (Song stanzas, Bible verses/
+       Split). Starts fully transparent (no background of its own) so Sources
+       shows straight through until a Song/Bible slide actually sets one; the
+       Blank quick-action (clearOverlay()) puts it back to that same empty
+       state — see clearOverlay() below — without touching Sources at all.
+   Neither layer's function ever reaches into the other's elements, so
+   switching Sources/Songs/Bible can never replace, delete, or overwrite the
+   other layer's current content — they coexist exactly like a broadcast
+   PGM (base) + key/overlay (Song/Bible) pair.
+══════════════════════════════════════ */
+#sources-layer,#overlay-layer{
+  position:absolute;inset:0;
+  display:grid;
+  grid-template-rows:1fr;
+  grid-template-areas:"content";
   transition:background 0.4s ease;
   will-change:opacity,transform,background;
 }
-#screen.presenter-enter{animation:presenterFadeIn .24s ease both;}
-@keyframes presenterFadeIn{from{opacity:.22;transform:scale(.992);}to{opacity:1;transform:scale(1);}}
+#sources-layer{z-index:1;background:#000;}
+#overlay-layer{z-index:2;background:transparent;}
+#overlay-layer.slide-title-only{grid-template-rows:2fr 8fr;grid-template-areas:"title" "content";}
+#overlay-layer.slide-title-hint{grid-template-rows:2fr 7fr 1fr;grid-template-areas:"title" "content" "hint";}
+/* #title-area's own grid-area:content (below) is only a harmless fallback for
+   while it's display:none in the no-title case — without this override it
+   would stack directly on top of #content-area in the content cell instead of
+   landing in the dedicated top "title" row reserved for it above. */
+#overlay-layer.slide-title-only #title-area,
+#overlay-layer.slide-title-hint #title-area{grid-area:title;}
+/* title-area/content-area/source-content-area/hint-area are the GRID CELLS —
+   a fixed proportion of their layer, never affected by their own text content
+   (so long lyrics can never push the title out of position). Each flex-
+   centers a single naturally-sized text child; fitTextToBox() binary-searches
+   THAT child's font-size against the cell's fixed box. Measuring a grid item
+   stretched to fill its own cell would always "fit" by definition and tell us
+   nothing — the child has to be free to size itself first. */
 #title-area{
-  flex-shrink:0;
-  text-align:center;
-  padding:28px 56px 10px;
+  grid-area:content; /* harmless fallback while display:none in the default (no-title) state */
+  min-width:0;min-height:0;
   display:none;
+  align-items:center;justify-content:center;
+  text-align:center;
+  padding:10px 56px;
   max-width:100%;
   margin:0 auto;
   box-sizing:border-box;
@@ -33,14 +74,17 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;-webkit-text-si
   letter-spacing:0;
   transition:color .37s ease,letter-spacing .15s ease;
 }
-#content-area{
-  flex:1;
+/* Shared cell layout for the overlay's song/verse text (#content-area) and the
+   sources layer's clock/custom-text (#source-content-area) — same fixed-cell/
+   naturally-sized-child pattern as #title-area, just on two independent layers. */
+#content-area,#source-content-area{
+  grid-area:content;
+  min-width:0;min-height:0;
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
-  padding:36px 56px;
-  overflow:hidden;
+  padding:24px 56px;
 }
 #content{
   font-size:30px;color:#ffffff;
@@ -65,49 +109,73 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;-webkit-text-si
   font-size:30px;color:#ffffff;
   text-align:center;white-space:pre-wrap;
   font-family:sans-serif;display:none;
+  max-width:100%;
   word-break:break-word;
   letter-spacing:0;
   transition:color .37s ease,letter-spacing .15s ease;
 }
 #media{
-  position:fixed;inset:0;width:100%;height:100%;
+  position:absolute;inset:0;width:100%;height:100%;
   object-fit:fill;display:none;
 }
 #video{
-  position:fixed;inset:0;width:100%;height:100%;
+  position:absolute;inset:0;width:100%;height:100%;
   object-fit:fill;display:none;
 }
 #camera-video{
-  position:fixed;inset:0;width:100%;height:100%;
+  position:absolute;inset:0;width:100%;height:100%;
   object-fit:contain;background:#000;display:none;
 }
 #pdf-embed{
-  position:fixed;inset:0;width:100%;height:100%;
+  position:absolute;inset:0;width:100%;height:100%;
   border:none;background:#fff;display:none;
 }
 @media (prefers-reduced-motion:reduce){
-  #screen.presenter-enter{animation:none;}
-  #screen,#title,#content,#clock,#custom-text{transition:none;}
+  #sources-layer,#overlay-layer,#title,#content,#clock,#custom-text{transition:none;}
+}
+/* Hint now lives in its own dedicated grid row (see #overlay-layer.slide-title-hint)
+   instead of floating as a fixed corner overlay, so it gets real, predictable
+   space and can be auto-fit like everything else — never clipped. */
+#hint-area{
+  grid-area:content; /* harmless fallback while display:none outside .slide-title-hint */
+  min-width:0;min-height:0;
+  display:none;
+  align-items:center;justify-content:center;
+  text-align:center;
+  padding:2px 56px 10px;
 }
 #hint{
-  position:fixed;bottom:20px;right:24px;
+  display:flex;align-items:center;justify-content:center;gap:8px;
   font-size:26px;color:rgba(255,255,255,0.6);
   font-family:sans-serif;font-style:italic;
-  display:none;max-width:40%;
+  max-width:100%;
+  word-break:break-word;
+  transition:color .37s ease;
 }
+#hint span{min-width:0;} /* lets the text actually wrap instead of resisting shrink as a flex item */
+/* Bible split — strict 2 rows (references : verses = 2:10) × 2 equal columns.
+   Left/right are fully independent grid cells; each pane's reference/verse is
+   fit to ITS OWN cell only (see refitAll()), so the two sides can land on
+   completely different font sizes without affecting each other — same
+   wrapper-cell/naturally-sized-child pattern as #title-area/#content-area. */
 #split-screen{
-  position:fixed;inset:0;display:none;flex-direction:row;
+  position:absolute;inset:0;display:none;
+  grid-template-columns:10fr 10fr;
+  grid-template-rows:2fr 10fr;
+  grid-template-areas:"refL refR" "textL textR";
 }
-.split-pane{
-  flex:1;min-width:0;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  padding:32px 34px;overflow:hidden;
-  border-right:1px solid rgba(255,255,255,0.15);
+.split-ref-area,.split-text-area{
+  min-width:0;min-height:0;
+  display:flex;align-items:center;justify-content:center;
 }
-.split-pane:last-child{border-right:none;}
+#split-ref-area-l{grid-area:refL;padding:18px 24px 6px;}
+#split-ref-area-r{grid-area:refR;padding:18px 24px 6px;border-left:1px solid rgba(255,255,255,0.15);}
+#split-text-area-l{grid-area:textL;padding:6px 34px 32px;}
+#split-text-area-r{grid-area:textR;padding:6px 34px 32px;border-left:1px solid rgba(255,255,255,0.15);}
 .split-ref{
   font-size:22px;color:#9b59b6;font-weight:700;
-  margin-bottom:16px;text-align:center;font-family:sans-serif;
+  text-align:center;font-family:sans-serif;
+  word-break:break-word;
   transition:color .37s ease;
 }
 .split-text{
@@ -119,49 +187,127 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;-webkit-text-si
 </head>
 <body>
 <div id="screen">
-  <div id="title-area">
-    <div id="title"></div>
-  </div>
-  <div id="content-area">
-    <div id="content"></div>
-    <div id="clock"></div>
-    <div id="date"></div>
-    <div id="custom-text"></div>
-  </div>
-  <img id="media" src="">
-  <video id="video" autoplay loop muted playsinline></video>
-  <video id="camera-video" autoplay muted playsinline></video>
-  <embed id="pdf-embed" type="application/pdf">
-  <div id="hint"></div>
-  <div id="split-screen">
-    <div class="split-pane" id="split-pane-l">
-      <div class="split-ref" id="split-ref-l"></div>
-      <div class="split-text" id="split-text-l"></div>
+  <div id="sources-layer">
+    <div id="source-content-area">
+      <div id="clock"></div>
+      <div id="date"></div>
+      <div id="custom-text"></div>
     </div>
-    <div class="split-pane" id="split-pane-r">
-      <div class="split-ref" id="split-ref-r"></div>
-      <div class="split-text" id="split-text-r"></div>
+    <img id="media" src="">
+    <video id="video" autoplay loop muted playsinline></video>
+    <video id="camera-video" autoplay muted playsinline></video>
+    <embed id="pdf-embed" type="application/pdf">
+  </div>
+  <div id="overlay-layer">
+    <div id="title-area">
+      <div id="title"></div>
+    </div>
+    <div id="content-area">
+      <div id="content"></div>
+    </div>
+    <div id="hint-area">
+      <div id="hint"></div>
+    </div>
+    <div id="split-screen">
+      <div class="split-ref-area" id="split-ref-area-l"><div class="split-ref" id="split-ref-l"></div></div>
+      <div class="split-ref-area" id="split-ref-area-r"><div class="split-ref" id="split-ref-r"></div></div>
+      <div class="split-text-area" id="split-text-area-l"><div class="split-text" id="split-text-l"></div></div>
+      <div class="split-text-area" id="split-text-area-r"><div class="split-text" id="split-text-r"></div></div>
     </div>
   </div>
 </div>
 
 <script>
 var clockInterval = null;
-var currentMode = 'clock';
-var presenterTransitionTimer = null;
-var _requestedFontSize = 30;
+// Sources and Overlay are independent layers now, so each tracks its own
+// "what's currently showing" mode separately — see LAYER ARCHITECTURE above.
+// currentSourceMode: 'clock'|'gap'|'camera'|'pdf' (showGap/showCamera/showPdf/clearDisplay)
+// currentOverlayMode: 'none'|'song'|'verse'|'split' (showContent/showSplit/clearOverlay)
+var currentSourceMode = 'clock';
+var currentOverlayMode = 'none';
+var presenterTransitionTimer = null;   // kept for compatibility with any external reference; layer timers below are what's actually used
+var _requestedFontSize = 30;       // OVERLAY content/verse/split-text ceiling (sent fresh with every showContent/showSplit call)
+var _requestedSourceFontSize = 30; // SOURCES custom-text ceiling (sent fresh with every showGap call) — kept separate from
+                                    // _requestedFontSize so a Source's custom-text size never leaks into the Song/Bible overlay's
+                                    // sizing ceiling (or vice versa) the next time refitAll() runs (e.g. on resize).
+// Heading/reference size has no user control any more — it's always fully
+// automatic, so this simply stays at the hard ceiling (FIT_MAX_HEADING) rather
+// than tracking a live-adjustable request like _requestedFontSize does.
+var _requestedTitleFontSize = 48;
+
+// Hard ceilings the auto-fit system never exceeds. Minimums mirror the
+// smallest size the design considers still readable.
+var FIT_MIN_HEADING=12, FIT_MAX_HEADING=48;
+var FIT_MIN_CONTENT=16, FIT_MAX_CONTENT=96;
+var FIT_MIN_HINT=10, FIT_MAX_HINT=26;
 
 function isPreviewPresenter(){
   return location.hash.indexOf('preview') !== -1 || location.search.indexOf('preview') !== -1;
 }
-function animatePresenterChange(){
-  var screen=document.getElementById('screen');
-  if(!screen)return;
-  screen.classList.remove('presenter-enter');
-  void screen.offsetWidth;
-  screen.classList.add('presenter-enter');
-  if(presenterTransitionTimer)clearTimeout(presenterTransitionTimer);
-  presenterTransitionTimer=setTimeout(function(){screen.classList.remove('presenter-enter');},280);
+
+// ============================================================
+// SLIDE TRANSITION — mirrors controller.html's own Preview → Live Transition
+// system (fadeSettings/FADE_TYPE_TRANSFORMS) so the actual presenter output
+// (this file, loaded identically by the Preview iframe, the Live iframe, AND
+// the real external cast display) performs the SAME selected type/duration/
+// easing rather than a fixed built-in fade. setSlideTransition() is called
+// from controller.html (via the iframe bridge) and from the Android bridge
+// (via CastPresentation.runJS) right before every screen-changing call, so
+// this is always in sync with whichever category (Songs/Bible/Sources) is
+// currently on screen.
+// ============================================================
+var _transType='fade', _transDuration=260, _transEasing='ease';
+// One-shot instant flag — set true by the CUT quick-action (via setSlideTransition's
+// 4th arg) for exactly the one screen-changing call that immediately follows it, then
+// consumed/cleared by animateLayer() below. Kept fully separate from _transType/
+// _transDuration/_transEasing (the persistent, user-configured Transition settings)
+// so CUT never reads, modifies, or depends on those — it just skips animateLayer()'s
+// whole opacity/transform/background dance for that one call, which is the only way
+// to make it truly instant (a 0ms CSS transition still runs a reflow/animation frame).
+var _transInstant=false;
+var TRANSITION_OUT_TRANSFORMS={fade:'',slide:'translateX(24px)',zoom:'scale(.92)'};
+function setSlideTransition(type,duration,easing,instant){
+  if(type)_transType=type;
+  if(duration!=null)_transDuration=duration;
+  if(easing)_transEasing=easing;
+  _transInstant=!!instant;
+}
+// Runs the transition on ONE layer at a time (layerId: 'sources-layer' or
+// 'overlay-layer') — each layer keeps its own timer so animating one (e.g.
+// blanking the overlay) can never cut off or interfere with the other (e.g. a
+// source's background still mid-transition underneath).
+var _layerTransitionTimers={};
+function animateLayer(layerId){
+  var layer=document.getElementById(layerId);
+  if(!layer)return;
+  if(_layerTransitionTimers[layerId]){clearTimeout(_layerTransitionTimers[layerId]);_layerTransitionTimers[layerId]=null;}
+  if(_transInstant){
+    // CUT: apply the already-changed background/content with NO transition of any
+    // kind (opacity, transform, OR the layer's own CSS "background 0.4s ease") —
+    // style.transition='none' overrides that class-level rule too, not just the
+    // ones set below, so the background swap is instant as well.
+    _transInstant=false;
+    layer.style.transition='none';
+    layer.style.opacity='';
+    layer.style.transform='';
+    return;
+  }
+  if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    layer.style.transition='';layer.style.opacity='';layer.style.transform='';
+    return;
+  }
+  var fromTransform=TRANSITION_OUT_TRANSFORMS[_transType]||'';
+  var ms=_transDuration||0;
+  layer.style.transition='none';
+  layer.style.opacity='.22';
+  layer.style.transform=fromTransform;
+  void layer.offsetWidth; // commit the start state before the transition below picks it up
+  layer.style.transition='opacity '+ms+'ms '+_transEasing+', transform '+ms+'ms '+_transEasing+', background 0.4s ease';
+  layer.style.opacity='1';
+  layer.style.transform='none';
+  _layerTransitionTimers[layerId]=setTimeout(function(){
+    layer.style.transition='';layer.style.opacity='';layer.style.transform='';
+  },ms);
 }
 function reportPresenterViewport(){
   if(isPreviewPresenter())return;
@@ -170,26 +316,76 @@ function reportPresenterViewport(){
   }
 }
 
-// ── Auto-fit: find largest font that fits its container area ──────────
-function autoFit(elId,areaId){
-  var el=document.getElementById(elId);
+// ============================================================
+// AUTO-FIT — one reusable system for every piece of slide text (title/
+// reference, lyric/verse, hint, both split panes). Finds the LARGEST font size
+// within [minPx,maxPx] that lets the element's COMPLETE content fit inside its
+// container — both width and height — so nothing is ever truncated, clipped,
+// or pushed outside its box. Never uses overflow:hidden to hide excess text;
+// it always finds a size (down to minPx) that actually shows everything.
+//
+//   fitTextToBox(el, area, minPx, maxPx) — works on elements directly.
+//   autoFit(elId, areaId, minPx, maxPx)  — thin id-based wrapper, kept for the
+//     existing call-site style used throughout this file.
+//
+// area must be the element's own dedicated container (a fixed-size grid/flex
+// cell, e.g. #title-area for #title) — NOT an ancestor that also contains
+// other visible text, and never the element itself (a grid/flex item stretched
+// to fill its own cell would always "fit" by definition and tell us nothing —
+// the text child has to be free to size itself first). Binary search over a
+// ~90-step integer range is ~7 reflows, not hundreds.
+// ============================================================
+function fitTextToBox(el,area,minPx,maxPx){
   if(!el||el.style.display==='none')return;
-  var area=document.getElementById(areaId||'content-area');
   if(!area||!area.clientWidth||!area.clientHeight)return;
-  var maxW=area.clientWidth;
-  var maxH=area.clientHeight;
-  // If already fits at requested size, keep it
-  el.style.fontSize=_requestedFontSize+'px';
-  if(el.offsetHeight<=maxH&&el.offsetWidth<=maxW)return;
-  // Binary-search for largest fitting size
-  var lo=8,hi=_requestedFontSize,best=lo;
+  var maxW=area.clientWidth,maxH=area.clientHeight;
+  function fits(px){
+    el.style.fontSize=px+'px';
+    return el.offsetHeight<=maxH&&el.offsetWidth<=maxW;
+  }
+  if(fits(maxPx))return; // complete content already fits at the ceiling — use it as-is
+  var lo=minPx,hi=maxPx,best=lo;
+  fits(lo); // even if the minimum doesn't fit, show the minimum (readable) rather than clipping
   while(lo<=hi){
     var mid=Math.floor((lo+hi)/2);
-    el.style.fontSize=mid+'px';
-    if(el.offsetHeight<=maxH&&el.offsetWidth<=maxW){best=mid;lo=mid+1;}
+    if(fits(mid)){best=mid;lo=mid+1;}
     else{hi=mid-1;}
   }
   el.style.fontSize=best+'px';
+}
+function autoFit(elId,areaId,minPx,maxPx){
+  fitTextToBox(document.getElementById(elId),document.getElementById(areaId||'content-area'),
+    minPx||FIT_MIN_CONTENT,maxPx||FIT_MAX_CONTENT);
+}
+
+// Re-fits whatever is actually visible right now — used after anything that
+// could change wrapping/sizing (resize, font weight/width changes, live font-
+// size slider) instead of duplicating "what's currently showing" per call site.
+// Split's left/right panes are always fit independently of each other — a
+// short left verse and a very long right verse can land on completely
+// different sizes, each the largest that fits its own pane. Sources' custom-
+// text and the overlay's title/content/hint are independent of each other too
+// (separate layers) and are simply fit whenever each is actually visible.
+function refitAll(){
+  if(currentOverlayMode==='split'){
+    autoFit('split-ref-l','split-ref-area-l',FIT_MIN_HEADING,Math.min(_requestedTitleFontSize,FIT_MAX_HEADING));
+    autoFit('split-ref-r','split-ref-area-r',FIT_MIN_HEADING,Math.min(_requestedTitleFontSize,FIT_MAX_HEADING));
+    autoFit('split-text-l','split-text-area-l',FIT_MIN_CONTENT,Math.min(_requestedFontSize,FIT_MAX_CONTENT));
+    autoFit('split-text-r','split-text-area-r',FIT_MIN_CONTENT,Math.min(_requestedFontSize,FIT_MAX_CONTENT));
+  } else {
+    if(document.getElementById('title').style.display!=='none'){
+      autoFit('title','title-area',FIT_MIN_HEADING,Math.min(_requestedTitleFontSize,FIT_MAX_HEADING));
+    }
+    if(document.getElementById('content').style.display!=='none'){
+      autoFit('content','content-area',FIT_MIN_CONTENT,Math.min(_requestedFontSize,FIT_MAX_CONTENT));
+    }
+    if(document.getElementById('hint').style.display!=='none'){
+      autoFit('hint','hint-area',FIT_MIN_HINT,FIT_MAX_HINT);
+    }
+  }
+  if(document.getElementById('custom-text').style.display!=='none'){
+    autoFit('custom-text','source-content-area',FIT_MIN_CONTENT,Math.min(_requestedSourceFontSize,FIT_MAX_CONTENT));
+  }
 }
 
 function showClock(){
@@ -216,8 +412,9 @@ function pad(n){return n<10?'0'+n:n;}
 
 // Releases the camera <video>'s srcObject (without stopping the underlying
 // MediaStream — that stream is owned by controller.html and may still be in
-// use elsewhere) and hides the PDF embed. Called whenever any other mode
-// (song/verse/gap/split) takes over the screen.
+// use elsewhere) and hides the PDF embed. Called whenever a DIFFERENT Source
+// (clock/blank/text/image/video/pdf) takes over the sources layer — a purely
+// intra-layer concern, never called by the overlay's showContent()/showSplit().
 function _releaseSpecialSurfaces(){
   var cam=document.getElementById('camera-video');
   if(cam){cam.pause();cam.srcObject=null;cam.style.display='none';}
@@ -225,48 +422,58 @@ function _releaseSpecialSurfaces(){
   if(pdf&&pdf.style.display!=='none'){pdf.style.display='none';pdf.removeAttribute('src');}
 }
 
-// Called by Android bridge — show two Bible verses side-by-side (Split tab)
+// Clears the overlay's title/hint grid-ratio state (see #overlay-layer.slide-
+// title-only/.slide-title-hint in the CSS) back to the single full-screen
+// "content" row — called by every overlay mode that doesn't use the song/
+// Bible title+content+hint layout (clearOverlay/showSplit; showContent sets
+// its own state directly). Only ever touches #overlay-layer — Sources has no
+// equivalent layout modifiers.
+function _clearSlideLayout(){
+  document.getElementById('overlay-layer').classList.remove('slide-title-only','slide-title-hint');
+}
+
+// Called by Android bridge — show two Bible verses side-by-side (Split tab).
+// OVERLAY ONLY: never touches #sources-layer or any Source element, so
+// whatever Source is currently showing keeps running underneath untouched.
 function showSplit(leftRef,leftText,rightRef,rightText,bg,titleColor,textColor,fontSize){
-  hideClock();
-  _releaseSpecialSurfaces();
   _requestedFontSize=fontSize||26;
-  var screen=document.getElementById('screen');
-  if(bg&&bg.startsWith('data:')){screen.style.background='url('+bg+') center/cover no-repeat';}
-  else{screen.style.background=bg||'#000000';}
+  var overlay=document.getElementById('overlay-layer');
+  if(bg&&bg.startsWith('data:')){overlay.style.background='url('+bg+') center/cover no-repeat';}
+  else{overlay.style.background=bg||'transparent';}
+  _clearSlideLayout();
   document.getElementById('title-area').style.display='none';
   document.getElementById('content').style.display='none';
-  document.getElementById('custom-text').style.display='none';
-  document.getElementById('media').style.display='none';
-  document.getElementById('video').style.display='none';
-  document.getElementById('hint').style.display='none';
-  document.getElementById('split-screen').style.display='flex';
+  document.getElementById('hint-area').style.display='none';
+  document.getElementById('split-screen').style.display='grid';
   var refL=document.getElementById('split-ref-l'),refR=document.getElementById('split-ref-r');
   var txtL=document.getElementById('split-text-l'),txtR=document.getElementById('split-text-r');
   refL.textContent=leftRef||''; refL.style.color=titleColor||'#9b59b6';
   refR.textContent=rightRef||''; refR.style.color=titleColor||'#9b59b6';
-  txtL.textContent=leftText||''; txtL.style.color=textColor||'#ffffff'; txtL.style.fontSize=_requestedFontSize+'px';
-  txtR.textContent=rightText||''; txtR.style.color=textColor||'#ffffff'; txtR.style.fontSize=_requestedFontSize+'px';
-  currentMode='split';
-  animatePresenterChange();
-  setTimeout(function(){autoFit('split-text-l','split-pane-l');autoFit('split-text-r','split-pane-r');},0);
+  txtL.textContent=leftText||''; txtL.style.color=textColor||'#ffffff';
+  txtR.textContent=rightText||''; txtR.style.color=textColor||'#ffffff';
+  currentOverlayMode='split';
+  animateLayer('overlay-layer');
+  setTimeout(refitAll,0);
 }
 
-// Called by Android bridge — show song/verse content
-function showContent(type,titleText,bodyText,bg,titleColor,textColor,fontSize,hintText){
-  hideClock();
-  _releaseSpecialSurfaces();
+// Called by Android bridge — show song/verse content on the OVERLAY layer,
+// drawn on top of whatever Source is currently showing. Never touches
+// #sources-layer or any Source element (custom-text/media/video/clock) —
+// Sources keeps running underneath exactly as it was.
+function showContent(type,titleText,bodyText,bg,titleColor,textColor,fontSize,hintText,hintColor){
   _requestedFontSize=fontSize||30;
-  var screen=document.getElementById('screen');
-  if(bg&&bg.startsWith('data:')){screen.style.background='url('+bg+') center/cover no-repeat';}
-  else{screen.style.background=bg||'#000000';}
+  var overlay=document.getElementById('overlay-layer');
+  if(bg&&bg.startsWith('data:')){overlay.style.background='url('+bg+') center/cover no-repeat';}
+  else{overlay.style.background=bg||'transparent';}
   document.getElementById('split-screen').style.display='none';
   // Title area
   var titleArea=document.getElementById('title-area');
   var titleEl=document.getElementById('title');
-  if(titleText){
+  var hasTitle=!!titleText;
+  if(hasTitle){
     titleEl.textContent=titleText;
     titleEl.style.color=titleColor||'#9b59b6';
-    titleArea.style.display='block';
+    titleArea.style.display='flex';
   } else {
     titleArea.style.display='none';
   }
@@ -274,36 +481,44 @@ function showContent(type,titleText,bodyText,bg,titleColor,textColor,fontSize,hi
   var contentEl=document.getElementById('content');
   contentEl.textContent=bodyText||'';
   contentEl.style.color=textColor||'#ffffff';
-  contentEl.style.fontSize=_requestedFontSize+'px';
   contentEl.style.display='block';
-  document.getElementById('custom-text').style.display='none';
-  document.getElementById('media').style.display='none';
-  document.getElementById('video').style.display='none';
-  // Hint
+  // Hint — its own dedicated 1fr row at the bottom (see .slide-title-hint), not
+  // a corner overlay any more, so it always gets real space and is auto-fit.
+  var hintArea=document.getElementById('hint-area');
   var hintEl=document.getElementById('hint');
-  hintEl.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor" style="width:40px;height:20px;"><rect x="1" y="10" width="22" height="4" rx="2"/></svg>'+(hintText||'');
-  hintEl.style.display=hintText?'block':'none';
-  currentMode=type;
-  animatePresenterChange();
-  // Auto-fit after layout
-  setTimeout(function(){autoFit('content');},0);
+  var hasHint=!!hintText;
+  hintEl.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor" style="width:40px;height:20px;flex-shrink:0;"><rect x="1" y="10" width="22" height="4" rx="2"/></svg><span>'+(hintText||'')+'</span>';
+  // Hint color only ever matters while hintArea is actually visible — i.e. only for
+  // song slides that carry a hint (Bible has no hint text, so hintColor is simply
+  // never sent for it and this line has no effect).
+  hintEl.style.color=hintColor||'rgba(255,255,255,0.6)';
+  hintArea.style.display=hasHint?'flex':'none';
+  // Container ratio: 2:7:1 (title:content:hint) with a hint, 2:8 without one —
+  // see #overlay-layer.slide-title-only/.slide-title-hint in the CSS. Neither
+  // class applies when there's no title at all (a titleless verse, if that
+  // ever happens) — content then just gets the full overlay, same as before.
+  overlay.classList.toggle('slide-title-only',hasTitle&&!hasHint);
+  overlay.classList.toggle('slide-title-hint',hasTitle&&hasHint);
+  currentOverlayMode=type;
+  animateLayer('overlay-layer');
+  // Auto-fit after layout has actually settled into its new grid-row sizes.
+  setTimeout(refitAll,0);
 }
 
-// Called by Android bridge — show gap screen
+// Called by Android bridge — show a Source on the SOURCES (base) layer.
+// SOURCES ONLY: never touches #overlay-layer or any Song/Bible element — a
+// currently-showing Song/Bible overlay is left exactly as it was.
 function showGap(type,text,bg,textColor,fontSize){
   _releaseSpecialSurfaces();
-  _requestedFontSize=fontSize||30;
-  var screen=document.getElementById('screen');
-  if(bg&&bg.startsWith('data:')){screen.style.background='url('+bg+') center/cover no-repeat';}
-  else{screen.style.background=bg||'#000000';}
-  document.getElementById('title-area').style.display='none';
-  document.getElementById('content').style.display='none';
+  _requestedSourceFontSize=fontSize||30;
+  var sourcesLayer=document.getElementById('sources-layer');
+  if(bg&&bg.startsWith('data:')){sourcesLayer.style.background='url('+bg+') center/cover no-repeat';}
+  else{sourcesLayer.style.background=bg||'#000000';}
   document.getElementById('media').style.display='none';
   document.getElementById('video').style.display='none';
   document.getElementById('custom-text').style.display='none';
-  document.getElementById('split-screen').style.display='none';
   hideClock();
-  currentMode='gap';
+  currentSourceMode='gap';
   if(type==='clock'){
     showClock();
   } else if(type==='blank'){
@@ -312,32 +527,28 @@ function showGap(type,text,bg,textColor,fontSize){
     var ct=document.getElementById('custom-text');
     ct.textContent=text||'';
     ct.style.color=textColor||'#ffffff';
-    ct.style.fontSize=_requestedFontSize+'px';
     ct.style.display='block';
-    setTimeout(function(){autoFit('custom-text');},0);
+    setTimeout(refitAll,0);
   } else if(type==='image'){
     if(text){document.getElementById('media').src=text;document.getElementById('media').style.display='block';}
   } else if(type==='video'){
     if(text){document.getElementById('video').src=text;document.getElementById('video').style.display='block';}
   }
-  animatePresenterChange();
+  animateLayer('sources-layer');
 }
 
 // Called from controller.html (same-origin iframe call, not the Android string
 // bridge — a MediaStream can't cross that) to show a USB/capture camera
 // source. Local monitors only for now: there is no native path yet to also
 // relay a live MediaStream into the external CastPresentation display.
+// SOURCES ONLY — see showGap() above.
 function showCamera(stream){
   hideClock();
-  document.getElementById('title-area').style.display='none';
-  document.getElementById('content').style.display='none';
   document.getElementById('custom-text').style.display='none';
   document.getElementById('media').style.display='none';
   document.getElementById('video').style.display='none';
-  document.getElementById('split-screen').style.display='none';
-  document.getElementById('hint').style.display='none';
   document.getElementById('pdf-embed').style.display='none';
-  document.getElementById('screen').style.background='#000000';
+  document.getElementById('sources-layer').style.background='#000000';
   var cam=document.getElementById('camera-video');
   if(stream){
     cam.srcObject=stream;
@@ -346,106 +557,84 @@ function showCamera(stream){
   } else {
     cam.style.display='none';
   }
-  currentMode='camera';
-  animatePresenterChange();
+  currentSourceMode='camera';
+  animateLayer('sources-layer');
 }
 
 // Called by Android bridge — show a PDF (data: URL) using the WebView's
 // built-in PDF renderer via <embed>. There is no bundled PDF.js/renderer in
 // this build; if the WebView itself can't render PDFs, this will simply show
 // a blank/broken-plugin area rather than pretending to render one.
+// SOURCES ONLY — see showGap() above.
 function showPdf(dataUrl){
   hideClock();
   _releaseSpecialSurfaces();
-  document.getElementById('title-area').style.display='none';
-  document.getElementById('content').style.display='none';
   document.getElementById('custom-text').style.display='none';
   document.getElementById('media').style.display='none';
   document.getElementById('video').style.display='none';
-  document.getElementById('split-screen').style.display='none';
-  document.getElementById('hint').style.display='none';
-  document.getElementById('screen').style.background='#ffffff';
+  document.getElementById('sources-layer').style.background='#ffffff';
   var pdf=document.getElementById('pdf-embed');
   if(dataUrl){pdf.src=dataUrl;pdf.style.display='block';}
-  currentMode='pdf';
-  animatePresenterChange();
+  currentSourceMode='pdf';
+  animateLayer('sources-layer');
 }
 
-// Called by Android bridge — clear display back to clock
+// Called by Android bridge — clear the SOURCES layer back to clock. SOURCES
+// ONLY: leaves whatever Song/Bible overlay is currently showing untouched —
+// use clearOverlay() (below) to clear that instead.
 function clearDisplay(){
   _releaseSpecialSurfaces();
-  document.getElementById('title-area').style.display='none';
-  document.getElementById('content').style.display='none';
   document.getElementById('custom-text').style.display='none';
   document.getElementById('media').style.display='none';
   document.getElementById('video').style.display='none';
-  document.getElementById('split-screen').style.display='none';
-  document.getElementById('screen').style.background='#000000';
+  document.getElementById('sources-layer').style.background='#000000';
   showClock();
-  currentMode='clock';
-  animatePresenterChange();
+  currentSourceMode='clock';
+  animateLayer('sources-layer');
 }
 
-// Live font size update — called by Android bridge when slider moves
-function updateFontSize(size){
-  _requestedFontSize=size;
-  var content=document.getElementById('content');
-  var ct=document.getElementById('custom-text');
-  if(content.style.display!=='none'){
-    content.style.fontSize=size+'px';
-    setTimeout(function(){autoFit('content');},0);
-  }
-  if(ct.style.display!=='none'){
-    ct.style.fontSize=size+'px';
-    setTimeout(function(){autoFit('custom-text');},0);
-  }
-  if(currentMode==='split'){
-    document.getElementById('split-text-l').style.fontSize=size+'px';
-    document.getElementById('split-text-r').style.fontSize=size+'px';
-    setTimeout(function(){autoFit('split-text-l','split-pane-l');autoFit('split-text-r','split-pane-r');},0);
-  }
-  document.getElementById('clock').style.fontSize=Math.round(size*2.2)+'px';
+// Called by Android bridge / controller.html's Blank quick-action — clears
+// ONLY the Song/Bible OVERLAY (title/content/hint/split all hidden, overlay
+// background back to fully transparent), leaving whatever Source is showing
+// on the base layer completely untouched. This is the overlay's mirror of
+// clearDisplay() above.
+function clearOverlay(){
+  _clearSlideLayout();
+  document.getElementById('title-area').style.display='none';
+  document.getElementById('content').style.display='none';
+  document.getElementById('hint-area').style.display='none';
+  document.getElementById('split-screen').style.display='none';
+  document.getElementById('overlay-layer').style.background='transparent';
+  currentOverlayMode='none';
+  animateLayer('overlay-layer');
 }
 
-// Font weight update
+// Font weight update — Content font-weight control (Songs/Bible, from the
+// Appearance panel). OVERLAY ONLY: #clock/#custom-text belong to Sources,
+// which has no such typography setting, so they're deliberately left alone —
+// a Song/Bible typography change must never restyle whatever Source is
+// showing underneath. Heading (#title) is intentionally not included either:
+// it's always bold (see #title's own font-weight:700 in the CSS) rather than
+// user-adjustable.
 function updateFontWeight(weight){
   var w=weight+'';
   document.getElementById('content').style.fontWeight=w;
-  document.getElementById('custom-text').style.fontWeight=w;
-  document.getElementById('clock').style.fontWeight=w;
   document.getElementById('split-text-l').style.fontWeight=w;
   document.getElementById('split-text-r').style.fontWeight=w;
+  refitAll(); // a heavier/lighter weight can change how much a given size actually fits
 }
 
-// Live heading/reference font size — #title is shared by the Song heading and
-// the Bible reference (showContent's titleText argument), so one function
-// covers both appearance panels.
-function updateTitleFontSize(size){
-  document.getElementById('title').style.fontSize=size+'px';
-}
-
-// Live heading/reference font width (letter-spacing).
-function updateTitleFontWidth(px){
-  document.getElementById('title').style.letterSpacing=px+'px';
-}
-
-// Live body font width (letter-spacing) — Song lyrics / verse / custom text.
+// Live body font width (letter-spacing) — Song lyrics / verse content only;
+// see updateFontWeight() above for why Sources' #custom-text is excluded.
 function updateFontWidth(px){
   var ls=px+'px';
   document.getElementById('content').style.letterSpacing=ls;
-  document.getElementById('custom-text').style.letterSpacing=ls;
-}
-
-// Live heading/reference layout width, as a percentage of the screen — lets
-// the Bible reference block be narrowed so long references wrap sooner.
-function updateTitleWidth(pct){
-  document.getElementById('title-area').style.maxWidth=pct+'%';
+  refitAll();
 }
 
 // Re-fit on resize
 window.addEventListener('resize',function(){
-  autoFit('content');
-  autoFit('custom-text');
+  refitAll();
   reportPresenterViewport();
 });
 

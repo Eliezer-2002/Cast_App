@@ -30,13 +30,20 @@
     .header-icon-badge { width:28px; height:28px; border-radius:8px; background:rgba(155,89,182,.18); border:1px solid rgba(155,89,182,.35); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--accent); }
     .header-icon-badge svg { width:16px; height:16px; }
     #ctrl-header h1 { font-size:15px; font-weight:800; letter-spacing:-.01em; flex:1; }
-    .cast-status { display:flex; align-items:center; gap:6px; border-radius:20px; padding:5px 10px; border:1px solid; }
+    /* Now an actual <button> (was a plain status div) — see onCastStatusClick() in
+       the script, which opens the device picker. Kept visually identical: the border/
+       background/reset here just neutralize default button chrome. */
+    .cast-status { display:flex; align-items:center; gap:6px; border-radius:20px; padding:5px 10px; border:1px solid; background:none; font-family:inherit; cursor:pointer; max-width:150px; }
+    .cast-status:active { opacity:.8; }
     .cast-status.live { background:rgba(39,174,96,.15); border-color:rgba(39,174,96,.3); }
     .cast-status.offline { background:rgba(231,76,60,.12); border-color:rgba(231,76,60,.25); }
-    .cast-dot-ctrl { width:7px; height:7px; border-radius:50%; }
+    .cast-dot-ctrl { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
     .cast-status.live .cast-dot-ctrl { background:var(--success); box-shadow:0 0 6px var(--success); animation:pulse 2s infinite; }
     .cast-status.offline .cast-dot-ctrl { background:var(--danger); box-shadow:0 0 4px var(--danger); animation:pulse 1.8s infinite; }
-    .cast-status span { padding-top: 3px; }
+    /* Text truncation belongs to _castStatusLabel() in the script (fixed ~6-char +
+       "…" cutoff, per spec) — this overflow/ellipsis is only a safety net for the
+       rare case where even that short label is still too wide for the header. */
+    .cast-status span { padding-top: 3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
     .cast-status.live span { font-size:10px; font-weight:800; letter-spacing:.04em; color:var(--success); }
     .cast-status.offline span { font-size:10px; font-weight:800; letter-spacing:.04em; color:var(--danger); }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
@@ -44,68 +51,58 @@
     .close-ctrl-btn:active { transform:scale(.92); }
     .close-ctrl-btn svg { width:17px; height:17px; }
 
-    /* MONITOR STAGE — LIVE + PREVIEW dual monitors, laid out on a CSS Grid so window
-       position (swap) and control position (Swap/Fade/Cut buttons) are two completely
-       independent concerns. Swapping toggles which named grid-area the Live/Preview
-       CARDS sit in (#monitor-grid.mon-swapped below); the control wrappers (.mon-ctrl-*)
-       always keep the same grid-area and are never touched by that class, so they
-       physically cannot move when the windows swap.
+    /* MONITOR STAGE — LIVE + PREVIEW dual monitors, laid out side by side on a CSS
+       Grid so window position (swap) is decoupled from window identity/content.
+       Swapping toggles which named grid-area ("preview"/"live") each CARD sits in
+       (#monitor-grid.mon-swapped below) — the cards' own classes (monitor-live/
+       monitor-preview) never change, so content/state always stays with the right
+       card regardless of which physical column it's currently drawn in. The same
+       mechanism is reused by both the SWAP button and drag-to-swap (see
+       toggleSwapLivePreview()/setupCardInteractions() in the script).
 
-       NORMAL/full-size layout (per reference sketch) is two STACKED rows, each with
-       its own fixed control gutter — not side-by-side:
-         row 1: [ SWAP ]  [        LIVE        ]
-         row 2: [       PREVIEW       ]  [ FADE/CUT ]
-       A 3-column track (auto / 1fr / auto) lets each window SPAN two of the three
-       columns so it reads as "mostly-wide, one narrow gutter for its control" while
-       still sharing literal grid tracks with the row above/below it — LIVE spans the
-       middle+right columns (so its left edge starts right after Swap's column) and
-       Preview spans the left+middle columns (so its right edge ends right before
-       Fade/Cut's column). */
+       All Fade/Blank/Swap/Transfer quick-actions live in #ctrl-transfer-bar at the
+       bottom of the page — #monitor-grid holds ONLY the two monitor windows, so
+       there's no button gutter to lay out here any more. */
     #monitor-stage { flex-shrink:0; background:var(--bg); padding:6px 8px; display:flex; flex-direction:column; border-bottom:1px solid var(--border); }
     /* #monitor-grid is flex:1/min-height:0 so, once #monitor-stage is given an explicit
        (shrunk) pixel height by the resize handle, its rows compress to fit instead of
        overflowing and getting clipped by #monitor-stage's overflow:hidden. With no
        explicit stage height (the natural/default state) flex:1 is a no-op. */
-    /* Column sizing deliberately does NOT try to make "middle + outer column" exactly
-       equal the window's real 16:9 width via a JS-computed CSS variable — an earlier
-       version did that and it introduced a stale/lagging value during resize
-       (recomputing it requires reading the grid's own post-reflow width, which can
-       race the very resize that triggered it). It's also unnecessary: whatever slack
-       is left in the window's cell after its JS-set width is applied always ends up
-       on the side AWAY from that row's control, never between them — see
-       justify-content below on the window cards, and align-items on .mon-ctrl-swap/
-       .mon-ctrl-fadecut further down, which both hug the SAME shared column line from
-       opposite sides. That's what actually keeps the button-to-window gap pinned to
-       the grid's own 6px at every size, with no dependency on getting a live pixel
-       calculation exactly right. The 3fr/1fr split below only has to be a reasonable
-       continuous approximation, not an exact fit. */
     #monitor-grid {
       display:grid; flex:1; min-height:0; width:100%; gap:6px;
-      grid-template-columns: minmax(36px,1fr) minmax(0,3fr) minmax(36px,1fr);
-      grid-template-rows: minmax(0,1fr) minmax(0,1fr);
-      grid-template-areas: "swap live live" "preview preview fadecut";
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: minmax(0,1fr);
+      grid-template-areas: "preview live";
     }
-    /* Default window placement: Live on the swap row, Preview on the fade/cut row.
-       justify-content here is keyed to the GRID-AREA (not to which card currently
-       holds it): the "live" area's cell spans col2+col3, with col1/Swap adjacent on
-       its LEFT, so whatever sits in "live" hugs start (left) to keep that gap tight;
-       the "preview" area's cell spans col1+col2, with col3/Fade+Cut adjacent on its
-       RIGHT, so whatever sits in "preview" hugs end (right). Because this is driven
-       by grid-area rather than card identity, it stays correct in both swap states —
-       the card that ends up in "live" always hugs Swap, the one in "preview" always
-       hugs Fade/Cut, regardless of which is Live and which is Preview at that moment. */
-    #monitor-grid .monitor-card.monitor-live    { grid-area: live; justify-content:start; }
-    #monitor-grid .monitor-card.monitor-preview { grid-area: preview; justify-content:end; }
-    /* Swap ONLY reassigns which card sits in the "live" vs "preview" grid-area — the
-       swap/fadecut areas below are never referenced by .mon-swapped, so the buttons
-       physically cannot move when the windows swap. */
-    #monitor-grid.mon-swapped .monitor-card.monitor-live    { grid-area: preview; justify-content:end; }
-    #monitor-grid.mon-swapped .monitor-card.monitor-preview { grid-area: live; justify-content:start; }
-    /* Stage-compact gives each window its OWN column (no spanning, no adjacent
-       control in the same row — controls move to row 2 below), so there's no "hug
-       toward the control" reason to keep the edge-alignment there; center instead. */
-    #monitor-grid.stage-compact .monitor-card.monitor-live,
-    #monitor-grid.stage-compact .monitor-card.monitor-preview { justify-content:center; }
+    /* Default window placement: Preview left, Live right — driven by grid-area
+       rather than card identity, so it stays correct in both swap states: whichever
+       card is currently assigned the "preview"/"live" area is what renders there. */
+    #monitor-grid .monitor-card.monitor-live    { grid-area: live; }
+    #monitor-grid .monitor-card.monitor-preview { grid-area: preview; }
+    /* Swap ONLY reassigns which card sits in the "live" vs "preview" grid-area. */
+    #monitor-grid.mon-swapped .monitor-card.monitor-live    { grid-area: preview; }
+    #monitor-grid.mon-swapped .monitor-card.monitor-preview { grid-area: live; }
+    /* CLOSED WINDOWS — closing Preview or Live collapses its grid track to a slim
+       reopen strip and lets the remaining window use the freed space. Sized off the
+       grid-area name (swap-state independent) rather than off which card is closed,
+       so it stays correct regardless of current swap state — see
+       updateMonitorGridState() in the script, which derives area-preview-closed/
+       area-live-closed from monitorClosedState + the current swap state. */
+    #monitor-grid.area-preview-closed { grid-template-columns: minmax(48px,64px) 1fr; }
+    #monitor-grid.area-live-closed    { grid-template-columns: 1fr minmax(48px,64px); }
+    /* STACKED — when the grid's own rendered size (both dimensions) can no longer
+       give each side-by-side 16:9 card a usable width, switch to a single column of
+       two stacked rows instead. Toggled purely by updateMonitorStacking() in the
+       script off #monitor-grid's actual box (not a viewport media query), so it
+       reacts correctly to the vertical #preview-resize-handle shrinking the stage
+       even though the viewport's own width never changes. */
+    #monitor-grid.mon-stacked {
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr 1fr;
+      grid-template-areas: "preview" "live";
+    }
+    #monitor-grid.mon-stacked.area-preview-closed { grid-template-columns:1fr; grid-template-rows: minmax(40px,56px) 1fr; }
+    #monitor-grid.mon-stacked.area-live-closed    { grid-template-columns:1fr; grid-template-rows: 1fr minmax(40px,56px); }
     /* .monitor-card is now an INVISIBLE, flex-centering grid item — it fills its
        whole grid cell (so swap/grid-area math is unaffected) but draws nothing
        itself. .monitor-card-visual is the actual visible chrome (border, background,
@@ -114,15 +111,22 @@
        whole card (not just the inner video area) shrinks together with the display,
        and any leftover room in the grid cell is genuine empty space around the
        whole card, never a wide card wrapping a narrower video. */
-    .monitor-card { grid-area:live; min-width:0; min-height:0; display:flex; align-items:center;overflow:hidden;}
+    .monitor-card { grid-area:live; min-width:0; min-height:0; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; touch-action:none; }
+    .monitor-card.mon-closed { touch-action:auto; }
     .monitor-card-visual { display:flex; flex-direction:column; background:var(--bg2); border-radius:12px; overflow:hidden; border:2px solid var(--border); width:100%; max-width:100%; max-height:100%; }
     .monitor-card.monitor-live .monitor-card-visual { border-color:rgba(231,76,60,.55); }
     .monitor-card.monitor-preview .monitor-card-visual { border-color:rgba(155,89,182,.5); }
-    .monitor-badge-row { display:flex; align-items:center; justify-content:space-between; padding:5px 8px; flex-shrink:0; }
-    .monitor-badge { font-size:9px; font-weight:800; letter-spacing:.07em; padding:2px 7px; border-radius:5px; color:#fff; }
+    .monitor-badge-row { display:flex; align-items:center; padding:5px 8px; flex-shrink:0; gap:6px; }
+    .monitor-badge { font-size:9px; font-weight:800; letter-spacing:.07em; padding:2px 7px; border-radius:5px; color:#fff; flex-shrink:0; }
     .badge-live { background:var(--danger); }
     .badge-preview { background:var(--accent); }
-    .monitor-meta { font-size:9px; color:var(--text2); font-family:monospace; letter-spacing:.03em; }
+    .monitor-meta { font-size:9px; color:var(--text2); font-family:monospace; letter-spacing:.03em; flex:1; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    /* Close button — small square icon button in each monitor's badge row, opens/
+       closes that window independently. Reuses the app's existing small-icon-button
+       language (see .close-ctrl-btn in the header) instead of a new component. */
+    .mon-close-btn { width:20px; height:20px; border-radius:6px; background:var(--bg3); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text2); flex-shrink:0; }
+    .mon-close-btn svg { width:12px; height:12px; }
+    .mon-close-btn:active { opacity:.7; }
     /* The 16:9 rule applies to .presenter-frame-wrap itself (the actual display/video
        area). .monitor-screen-slot is a thin flex:1 region between badge-row and footer
        that stretches to whatever width .monitor-card-visual has been given — since
@@ -132,109 +136,44 @@
        ordinary CSS cascade, with no separate width/height ever set on the wrap itself. */
     .monitor-screen-slot { flex:1; min-width:0; min-height:0; display:flex; align-items:center; justify-content:center; overflow:hidden; }
     .presenter-frame-wrap { --presenter-w:1920px; --presenter-h:1080px; --preview-scale:0.1875; width:100%; aspect-ratio:16/9; overflow:hidden; background:#000; position:relative; transition:opacity .25s ease,transform .25s ease,width .18s ease; }
-
-    /* SWAP / FADE / CUT — fixed control clusters. Their grid-area (swap/fadecut) is set
-       once here and is structurally independent from the window-swap rules above.
-       .mon-ctrl-swap now also hosts the Blank quick-action, stacked directly ABOVE
-       Swap (a vertical column) so the pair has a stable, single-button-wide footprint
-       and never eats into the Live display's width. */
-    /* container-type:inline-size turns each control cluster into a query context so
-       the buttons inside it (see @container rules below) can keep shrinking their
-       actual padding/font/icon size in step with whatever width the grid or flex
-       layout actually gives this element — the same mechanism regardless of whether
-       that width came from the normal-state fr-column, the stage-compact row, or
-       anywhere between, so there's one continuous curve instead of a jump at a
-       breakpoint. */
-    .mon-ctrl { display:flex; align-items:center; justify-content:center; min-width:36px; container-type:inline-size; container-name:monctrl;}
-    /* Whatever slack the fr-based columns above leave in col1/col3 would, by
-       .mon-ctrl's align-items:center default, sit centered around the button —
-       reopening a gap between the button and its window on ONE side. Pulling each
-       control to the edge NEAREST its window instead (swap -> right, toward Live in
-       col2; fadecut -> left, toward Preview in col2) keeps that button-to-window gap
-       pinned to the grid's own 6px gap at every size, regardless of how much slack
-       col1/col3 end up with — the leftover just becomes outer margin on the page-edge
-       side instead, which reads as normal padding rather than a stray hole. */
-    .mon-ctrl-swap    { grid-area: swap; flex-direction:column; align-items:flex-end; gap:5px;}
-    .mon-ctrl-fadecut { grid-area: fadecut; flex-direction:column; align-items:flex-start; gap:5px; }
-    /* Button visuals — plain CSS only (gradient/shadow/icon badges), no emoji anywhere.
-       Each icon sits on its own tinted rounded badge (the same rgba(accent,.15-ish)
-       "icon badge" language already used for #ctrl-header's .header-icon-badge), and
-       the button face gets a subtle top-lit gradient + shadow for real depth instead
-       of a flat fill, so it doesn't look like a bare bordered rectangle. */
-    .monitor-action-btn { width:100%; max-width:64px; min-width:28px; border-radius:12px; border:1.5px solid var(--border); background:linear-gradient(180deg,var(--bg3),var(--bg2)); color:var(--text2); cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:8px 2px; font-size:9px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; font-family:'NotoSansTamil',sans-serif; white-space:nowrap; overflow:hidden; box-shadow:0 2px 5px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.04); transition:all .15s,opacity .25s ease,max-height .25s ease,padding .2s ease,font-size .2s ease,box-shadow .15s ease,border-color .15s ease;height: 80px;}
-    .monitor-action-btn svg { width:14px; height:14px; flex-shrink:0; padding:5px; border-radius:9px; box-sizing:content-box; background:rgba(155,89,182,.16); color:var(--accent3); transition:background .15s ease,color .15s ease,padding .2s ease; }
-    .monitor-action-btn:active { transform:scale(.93); box-shadow:0 1px 2px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.04); }
-    .monitor-blank-btn:active, .monitor-swap-btn:active, .monitor-fade-btn:active { border-color:var(--accent); color:var(--accent); }
-    .monitor-blank-btn:active svg, .monitor-swap-btn:active svg, .monitor-fade-btn:active svg { background:rgba(155,89,182,.32); }
-    /* Swap active/selected state — visibly distinct from the normal idle look so it's
-       clear at a glance that Live/Preview positions are currently swapped. */
-    .monitor-swap-btn.active { border-color:var(--accent); background:linear-gradient(180deg,var(--accent3),var(--accent2)); color:#fff; box-shadow:0 2px 10px rgba(155,89,182,.45), inset 0 1px 0 rgba(255,255,255,.15); }
-    .monitor-swap-btn.active svg { background:rgba(255,255,255,.22); color:#fff; }
-    .monitor-cut-btn { border-color:rgba(231,76,60,.35); }
-    .monitor-cut-btn svg { background:rgba(231,76,60,.16); color:var(--danger); }
-    .monitor-cut-btn:active { border-color:var(--danger); color:var(--danger); }
-    .monitor-cut-btn:active svg { background:rgba(231,76,60,.32); }
     .presenter-frame-wrap iframe { position:absolute; top:50%; left:50%; width:var(--presenter-w); height:var(--presenter-h); transform:translate(-50%, -50%)scale(var(--preview-scale)); transform-origin:center center; border:none; pointer-events:none; background:#000; }
+
+    /* DRAG-TO-SWAP feedback — see setupCardInteractions() in the script. Dragging
+       lifts the card above its sibling grid item (transform is applied inline by JS
+       while the gesture is in progress); the drop target gets a highlighted outline
+       while a drag is hovering over it. */
+    .monitor-card.mon-dragging { z-index:20; cursor:grabbing; opacity:.88; }
+    .monitor-card.mon-dragging .monitor-card-visual { box-shadow:0 10px 28px rgba(0,0,0,.5); }
+    .monitor-card.mon-drop-target .monitor-card-visual { outline:3px solid var(--accent); outline-offset:-3px; }
+
+    /* REOPEN STRIP — shown instead of a closed window's normal chrome; fills the
+       collapsed grid track (see .area-preview-closed/.area-live-closed above) with a
+       narrow, always-clickable affordance to bring the window back. */
+    .mon-reopen-strip { display:none; width:100%; height:100%; flex-direction:column; align-items:center; justify-content:center; gap:8px; background:var(--bg2); border:1.5px dashed var(--border); border-radius:12px; cursor:pointer; color:var(--text2); padding:8px 2px; }
+    .mon-reopen-strip svg { width:15px; height:15px; flex-shrink:0; }
+    .mon-reopen-strip span { font-size:9px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; writing-mode:vertical-rl; text-orientation:mixed; }
+    .mon-reopen-strip:active { border-color:var(--accent); color:var(--accent); }
+    .monitor-card.mon-closed .monitor-card-visual { display:none; }
+    .monitor-card.mon-closed .mon-reopen-strip { display:flex; }
+    /* STACKED reopen strip — under mon-stacked the collapsed track is short+wide
+       (a single-column layout) rather than tall+narrow (side-by-side layout), so
+       the strip needs a horizontal row (icon beside label) with the label drawn
+       upright instead of the tall-strip's stacked/rotated-text look. */
+    #monitor-grid.mon-stacked .mon-reopen-strip { flex-direction:row; }
+    #monitor-grid.mon-stacked .mon-reopen-strip span { writing-mode:horizontal-tb; text-orientation:mixed; }
 
     /* RESPONSIVE SHRINK — thresholds are driven by JS (measuring #monitor-stage's actual
        rendered height against its natural height, since that's what the resize handle
-       changes) rather than viewport breakpoints, toggling these two classes on #monitor-grid. */
-    /* ~25% shrink: Live/Preview reflow from stacked to SIDE-BY-SIDE, and the (now four)
-       controls drop into one shared row underneath both windows — Blank/Swap (now a
-       row instead of their normal-state column) and Fade/Cut stay two separate
-       elements each keeping their own fixed area, just adjacent now instead of
-       flanking their window vertically; reading left-to-right that's Blank, Swap,
-       Fade, Cut, matching the required order. */
-    #monitor-grid.stage-compact {
-      grid-template-columns: minmax(0,1fr) minmax(0,1fr);
-      grid-template-rows: minmax(0,1fr) auto;
-      grid-template-areas: "preview live" "swap fadecut";
-    }
-    /* Row-direction here (2 controls sharing one row, not each hugging its own
-       adjacent window anymore) — reset the normal-state edge-alignment back to
-       centered, and keep the row's own gaps tight. */
-    #monitor-grid.stage-compact .mon-ctrl-swap,
-    #monitor-grid.stage-compact .mon-ctrl-fadecut { flex-direction:row; align-items:center; gap:3px; padding:0 1px; }
-    /* Actual layout dimensions adapt here (not transform:scale): each button becomes an
-       equal flex:1 share of its (already equally-1fr) area, with min-width:0 so there is
-       never horizontal overflow no matter how many controls share the row. Padding/font/
-       icon size are deliberately NOT hardcoded here — the @container rules below (driven
-       by .mon-ctrl's container-type:inline-size) size them continuously off the actual
-       resolved width instead, so there's no discontinuity at the stage-compact boundary. */
-    #monitor-grid.stage-compact .monitor-action-btn { max-width:none; width:auto; flex:1 1 0; min-width:0;height: 63px;}
-
-    /* CONTINUOUS BUTTON SIZING — one shared curve for both the normal-state column
-       (.mon-ctrl is a single button's whole width) and the stage-compact row (.mon-ctrl
-       is shared by 2 buttons via flex:1, so each button gets roughly half the
-       container's width — hence the row-state thresholds below are ~2x the
-       column-state ones for the same per-button pixel size). Because this reacts to
-       .mon-ctrl's own resolved width rather than to the stage-compact/stage-tiny
-       class, it keeps adapting at every intermediate size before, during, and after
-       those breakpoints instead of jumping. */
-    @container monctrl (max-width: 90px) {
-      #monitor-grid:not(.stage-compact) .monitor-action-btn { padding:6px 2px; font-size:8px; gap:2px; }
-      #monitor-grid:not(.stage-compact) .monitor-action-btn svg { width:13px; height:13px; padding:4px; border-radius:8px; }
-    }
-    @container monctrl (max-width: 60px) {
-      #monitor-grid:not(.stage-compact) .monitor-action-btn { padding:4px 1px; font-size:7px; gap:1px; }
-      #monitor-grid:not(.stage-compact) .monitor-action-btn svg { width:11px; height:11px; padding:3px; border-radius:7px; }
-    }
-    @container monctrl (max-width: 180px) {
-      #monitor-grid.stage-compact .monitor-action-btn { padding:6px 2px; font-size:8px; gap:2px; }
-      #monitor-grid.stage-compact .monitor-action-btn svg { width:13px; height:13px; padding:4px; border-radius:8px; }
-    }
-    @container monctrl (max-width: 120px) {
-      #monitor-grid.stage-compact .monitor-action-btn { padding:4px 1px; font-size:7px; gap:1px; }
-      #monitor-grid.stage-compact .monitor-action-btn svg { width:11px; height:11px; padding:3px; border-radius:7px; }
-    }
-    /* ~50-60% shrink: Live/Preview stay side-by-side (same grid as stage-compact above);
-       only the control row fades out smoothly and collapses the space it used instead
-       of yanking it away — max-height+opacity avoids the abrupt jump. Blank lives inside
-       .mon-ctrl-swap so it fades/hides together with Swap automatically. */
-    #monitor-grid.stage-compact .mon-ctrl-swap,
-    #monitor-grid.stage-compact .mon-ctrl-fadecut { overflow:hidden; max-height:64px; opacity:1; transition:opacity .25s ease,max-height .25s ease,margin .25s ease; }
-    #monitor-grid.stage-tiny .mon-ctrl-swap,
-    #monitor-grid.stage-tiny .mon-ctrl-fadecut { max-height:0; opacity:0; margin:0; pointer-events:none; }
+       changes), toggling these two classes on #monitor-grid. With the quick-action
+       buttons moved out of the grid there's no separate layout to switch to any more —
+       Preview/Live stay side by side at every stage — so stage-compact/stage-tiny now
+       just trim the chrome (badge row / footer) padding to leave more room for the
+       16:9 display itself as the stage gets shorter. */
+    #monitor-grid.stage-compact .monitor-badge-row,
+    #monitor-grid.stage-compact .monitor-footer { padding:3px 6px; }
+    #monitor-grid.stage-tiny .monitor-badge-row,
+    #monitor-grid.stage-tiny .monitor-footer { padding:2px 5px; }
+    #monitor-grid.stage-tiny .monitor-footer-text { font-size:9px; }
     .monitor-footer { display:flex; align-items:center; gap:6px; padding:5px 8px; border-top:1px solid var(--border); background:var(--bg2); flex-shrink:0; }
     .monitor-footer-text { font-size:10px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
     .monitor-golive-btn { width:60px; border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:10px; font-weight:800; letter-spacing:.04em; gap:3px; flex-shrink:0; padding:0; }
@@ -258,8 +197,16 @@
     /* TRANSFER BAR — a permanent flex-shrink:0 row at the bottom of the page (like
        the header), not position:fixed, so #ctrl-controls-wrap above it simply gets
        less height rather than ever being covered by it. */
-    #ctrl-transfer-bar { flex-shrink:0; padding:8px 10px; background:var(--bg2); border-top:1px solid var(--border); }
+    /* [SQUARE : 2 : 1 — BLANK : TRANSITION : CUT] Blank is a fixed square icon button
+       (reuses .icon-btn, the app's existing square-icon-button language), Transition
+       (#btn-transfer) keeps its primary emphasis at 2 shares of the remaining row, CUT
+       (#btn-fade) gets 1 share. SWAP only shows up here (see .icon-btn#btn-swap below)
+       when one of Preview/Live is closed — see updateMonitorGridState() in the script. */
+    #ctrl-transfer-bar { flex-shrink:0; padding:8px 10px; background:var(--bg2); border-top:1px solid var(--border); display:flex; align-items:center; gap:8px; }
     #ctrl-transfer-bar .btn { padding:12px; font-size:13px; }
+    #ctrl-transfer-bar .icon-btn { flex:0 0 auto; }
+    #ctrl-transfer-bar #btn-transfer { flex:2 1 0; }
+    #ctrl-transfer-bar #btn-fade { flex:1 1 0; }
 
     /* VERTICAL RESIZE HANDLE between Preview/Live and Controls */
     .resize-handle { flex-shrink:0; height:16px; display:flex; align-items:center; justify-content:center; cursor:row-resize; background:var(--bg2); border-bottom:1px solid var(--border); touch-action:none; -webkit-user-select:none; user-select:none; }
@@ -395,10 +342,15 @@
     .bg-preset-btn.selected { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent); }
 
     /* RANGE ROW */
-    .range-row { display:flex; align-items:center; gap:8px; padding:6px 12px; }
-    .range-row label { font-size:11px; color:var(--text2); min-width:70px; }
-    .range-row input[type=range] { flex:1; accent-color:var(--accent); }
-    .range-val { font-size:11px; color:var(--accent); min-width:28px; text-align:right; font-weight:700; }
+    .range-row { display:flex; align-items:center; gap:8px; padding:6px 12px; max-width:100%; }
+    .range-row label { font-size:11px; color:var(--text2); min-width:0; flex:0 1 70px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    /* min-width:0 is the actual fix for the appearance popup's horizontal overflow —
+       a flex item's default min-width is its content's intrinsic size, and a bare
+       <input type=range> has no content to shrink, so without this it refuses to
+       shrink below its browser-default width and forces the row (and its .fab-*
+       ancestors) wider than the popup, which is what was producing the scrollbar. */
+    .range-row input[type=range] { flex:1 1 auto; min-width:0; accent-color:var(--accent); }
+    .range-val { font-size:11px; color:var(--accent); min-width:0; flex:0 0 auto; text-align:right; font-weight:700; }
 
     /* BG IMG ROW */
     .bg-img-row { display:flex; align-items:center; gap:8px; padding:6px 12px; }
@@ -502,28 +454,29 @@
       .bible-sel-grid { padding:5px 8px 3px; }
       .sel-btn { padding:6px 5px; font-size:10px; }
       #monitor-stage { padding:4px 8px; gap:4px; height:auto !important; }
-      /* Only room for one monitor in this squeeze — keep Preview + Fade/Cut, regardless
-         of swap state or shrink-class, exactly like before this change. */
-      #monitor-grid, #monitor-grid.stage-compact, #monitor-grid.stage-tiny {
-        grid-template-columns: auto minmax(0,1fr) !important;
+      /* Only room for one monitor in this squeeze — keep Preview, regardless of swap
+         state, shrink-class, or stacked-state, exactly like before this change
+         (Fade/Blank/Swap no longer live in the grid, so there's nothing else to
+         account for here). */
+      #monitor-grid, #monitor-grid.stage-compact, #monitor-grid.stage-tiny,
+      #monitor-grid.area-preview-closed, #monitor-grid.area-live-closed,
+      #monitor-grid.mon-stacked, #monitor-grid.mon-stacked.area-preview-closed,
+      #monitor-grid.mon-stacked.area-live-closed {
+        grid-template-columns: minmax(0,1fr) !important;
         grid-template-rows: minmax(0,1fr) !important;
-        grid-template-areas: "fadecut preview" !important;
+        grid-template-areas: "preview" !important;
       }
       #monitor-grid .monitor-card.monitor-preview,
       #monitor-grid.mon-swapped .monitor-card.monitor-preview { grid-area: preview; }
       #monitor-grid .monitor-card.monitor-live,
-      #monitor-grid.mon-swapped .monitor-card.monitor-live,
-      .mon-ctrl-swap { display:none; }
-      .mon-ctrl-fadecut { flex-direction:column !important; max-height:none !important; opacity:1 !important; }
+      #monitor-grid.mon-swapped .monitor-card.monitor-live { display:none; }
       .monitor-badge-row { padding:3px 6px; }
       .monitor-footer { padding:3px 6px; }
       .monitor-screen-mini { min-height:0; padding:4px 8px; }
       #preview-resize-handle { display:none; }
-      .mon-ctrl-fadecut { max-width:52px; }
-      .monitor-action-btn { padding:5px 2px; font-size:8px; }
-      .monitor-action-btn svg { width:13px; height:13px; }
-      #ctrl-transfer-bar { padding:4px 8px; }
+      #ctrl-transfer-bar { padding:4px 8px; gap:6px; }
       #ctrl-transfer-bar .btn { padding:7px; font-size:11px; }
+      #ctrl-transfer-bar .icon-btn { width:30px; height:30px; }
     }
 
     /* ══════════════════════════════════════
@@ -553,33 +506,74 @@
     .btn-cancel { background:#2a2a2a; color:#aaa; flex:0 0 90px; }
     #appear-fab{position:fixed;right:16px;bottom:72px;width:52px;height:52px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;z-index:149;box-shadow:0 4px 16px rgba(0,0,0,.5);touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;}
     #appear-fab svg{width:28px;height:28px;fill:#fff;}
-    #appear-fab-popup{position:fixed;z-index:148;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:14px 16px 18px;width:min(86vw,280px);max-height:min(76vh,560px);overflow-y:auto;box-shadow:0 6px 28px rgba(0,0,0,.55);display:none;}
+    /* box-sizing:border-box is already the page-wide default (see the universal * rule
+       near the top), so width:min(86vw,280px) already includes this padding — the
+       horizontal scrollbar this popup used to get was from children (chiefly the
+       range-row's <input type=range>) refusing to shrink to fit it — see the
+       .range-row input[type=range] min-width:0 fix above, which is the actual fix;
+       max-width:100% here is just a defensive floor for the box itself. */
+    #appear-fab-popup{position:fixed;z-index:148;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:14px 16px 18px;width:min(86vw,280px);max-width:100%;max-height:min(76vh,560px);overflow-y:auto;box-shadow:0 6px 28px rgba(0,0,0,.55);display:none;}
     .fab-popup-title{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;}
-    .fab-section{margin-bottom:14px;}
+    .fab-section{margin-bottom:14px;min-width:0;}
     .fab-section:last-child{margin-bottom:0;}
     .fab-section-label{font-size:10px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px;}
+    .fab-subrow-label{font-size:11px;color:var(--text2);font-weight:600;margin-bottom:5px;}
     .fab-section .appearance-btn-row{padding:0;margin-bottom:8px;}
     .fab-section .range-row{padding:0;margin-bottom:6px;}
     .fab-type-row{display:flex;gap:6px;flex-wrap:wrap;}
-    .fab-type-btn{flex:1;min-width:64px;padding:7px 6px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg3);color:var(--text);font-size:11px;font-family:'NotoSansTamil',sans-serif;cursor:pointer;}
+    .fab-type-btn{flex:1 1 64px;min-width:0;padding:7px 6px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg3);color:var(--text);font-size:11px;font-family:'NotoSansTamil',sans-serif;cursor:pointer;}
     .fab-type-btn.active{border-color:var(--accent);background:rgba(155,89,182,.18);color:var(--accent3);font-weight:700;}
+    .fab-select-row{display:flex;align-items:center;gap:8px;margin-top:8px;max-width:100%;}
+    .fab-select-row label{font-size:11px;color:var(--text2);flex:0 0 auto;}
+    .fab-select{flex:1 1 auto;min-width:0;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'NotoSansTamil',sans-serif;padding:7px 8px;}
     .fab-divider{height:1px;background:var(--border);margin:12px 0;}
+    /* Dropdowns near the bottom of the Appearance popup (e.g. the Easing picker,
+       which reuses .split-picker/.split-dropdown — see _fabFadeSectionHtml()) open
+       downward by default, which pushes them past the popup's own scrollable
+       bounds. Flip them to open upward (dropup) instead; the trigger's own
+       position/size and the dropdown's look are unchanged. */
+    #appear-fab-popup .split-dropdown { top:auto; bottom:calc(100% + 4px); }
 
     /* ══════════════════════════════════════
-       DOUBLE-TAP ENLARGED PREVIEW — double-tapping Live or Preview opens a
-       large-screen inspection popup without disturbing state. A single tap
-       never triggers this; see setupDoubleTap().
+       DOUBLE-TAP ENLARGED PREVIEW — double-tapping Live or Preview opens a floating
+       window showing the ACTUAL live/preview output (the real iframe is reparented
+       in, not cloned or screenshotted — see openHoldPreview() in the script), draggable
+       from anywhere on its surface. A single tap and a drag (for swap) never trigger
+       this; see setupCardInteractions(). Deliberately NOT a modal: .hold-preview-overlay
+       itself is pointer-events:none (just a fixed positioning root spanning the page)
+       so the rest of Cast Control stays fully visible and interactive — only
+       .hold-preview-box (pointer-events:auto) actually captures input. No
+       backdrop/dimming is used anywhere here.
     ══════════════════════════════════════ */
-    .hold-preview-overlay { position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:600; display:none; align-items:center; justify-content:center; padding:20px; }
-    .hold-preview-overlay.open { display:flex; }
-    .hold-preview-box { background:var(--bg2); border:1px solid var(--border); border-radius:18px; box-shadow:0 12px 48px rgba(0,0,0,.6); width:min(94vw,720px); max-height:88vh; display:flex; flex-direction:column; overflow:hidden; animation:holdPreviewIn .16s ease; }
+    .hold-preview-overlay { position:fixed; inset:0; z-index:600; display:none; pointer-events:none; }
+    .hold-preview-overlay.open { display:block; }
+    /* The whole box is the drag surface (cursor:grab/grabbing here), not just the
+       header — see the drag IIFE in the script, which only excludes the close button. */
+    .hold-preview-box { position:fixed; pointer-events:auto; background:var(--bg2); border:1px solid var(--border); border-radius:18px; box-shadow:0 12px 48px rgba(0,0,0,.6); width:min(94vw,720px); max-height:88vh; display:flex; flex-direction:column; overflow:hidden; animation:holdPreviewIn .16s ease; touch-action:none; cursor:grab; }
+    .hold-preview-box.mon-hp-dragging { cursor:grabbing; }
     @keyframes holdPreviewIn { from{transform:scale(.94);opacity:0;} to{transform:scale(1);opacity:1;} }
-    .hold-preview-header { display:flex; align-items:center; gap:10px; padding:10px 10px 10px 16px; border-bottom:1px solid var(--border); font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); flex-shrink:0; }
+    .hold-preview-header { display:flex; align-items:center; gap:10px; padding:5px 10px 5px 16px; border-bottom:1px solid var(--border); font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); flex-shrink:0; }
     .hold-preview-header span { flex:1; }
-    .hold-preview-close-btn { width:28px; height:28px; border-radius:8px; background:var(--bg3); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text2); flex-shrink:0; }
+    .hold-preview-close-btn { width:20px; height:20px; border-radius:8px; background:var(--bg3); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text2); flex-shrink:0; touch-action:auto; margin-top: auto; margin-bottom: auto; }
     .hold-preview-close-btn svg { width:15px; height:15px; }
     .hold-preview-close-btn:active { opacity:.7; }
-    .hold-preview-body { flex:1; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; gap:12px; overflow:auto; }
+    /* touch-action:none here (not just on .hold-preview-box) matters because this
+       element has overflow:auto — without its own explicit value, a touch drag
+       starting inside it can get claimed as native scrolling after only a few
+       pixels of movement instead of reaching the pointermove drag handler below,
+       which is exactly why dragging from the body used to stall almost immediately. */
+    .hold-preview-body { flex:1; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; overflow:auto; touch-action:none; }
+    /* Left behind in the real monitor card's slot while its content is floating, so
+       the card doesn't look broken — see openHoldPreview()/_restoreHoldPreviewSource().
+       Deliberately matches .presenter-frame-wrap's own box (width:100%;aspect-ratio:
+       16/9) rather than stretching height:100% of the slot — the wrap's height is
+       normally content-driven off that aspect-ratio, which is what gives
+       .monitor-card-visual (and #monitor-stage, when its height isn't pinned by the
+       resize handle) its natural size. A height:100% placeholder would instead
+       stretch to fill whatever space is available, changing that natural size the
+       moment Enlarged View opens/closes and cascading into a real (and unwanted)
+       #monitor-stage resize via the ResizeObserver below — see updateMonitorResponsive(). */
+    .mon-enlarged-placeholder { width:100%; aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; color:var(--text2); font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; text-align:center; padding:8px; }
     /* This slot (not the wrap) is what _syncFrameScale measures for "available box" —
        give IT the real, explicit width/height budget so the wrap it centers can be
        fitted to a true 16:9 rectangle inside it. */
@@ -631,6 +625,14 @@
     .device-list { display:flex; flex-direction:column; gap:6px; max-height:160px; overflow-y:auto; }
     .device-item { padding:9px 10px; border-radius:9px; background:var(--bg3); border:1.5px solid var(--border); cursor:pointer; font-size:12px; color:var(--text); }
     .device-item.active { border-color:var(--accent); background:rgba(155,89,182,.15); }
+
+    /* TOAST — small, non-blocking, auto-dismissing notice. Mirrors index.html's
+       own #toast/toast()/toastWarn() exactly (same shape, same warning icon) so
+       the two documents feel like one app, just using this app's own CSS vars
+       instead of index.html's hardcoded colors. pointer-events:none so it can
+       never block taps on the Cast Control UI underneath it. */
+    #toast { position:fixed; bottom:70px; left:50%; transform:translateX(-50%); display:none; align-items:center; gap:6px; background:var(--bg2); color:var(--warn); padding:10px 16px; border-radius:20px; font-size:12px; font-weight:700; z-index:10000; max-width:86vw; text-align:center; border:1px solid var(--border); box-shadow:0 6px 20px rgba(0,0,0,.35); pointer-events:none; }
+    #toast svg { width:15px; height:15px; flex-shrink:0; }
   </style>
 </head>
 <body style="display:flex;flex-direction:column;height:100vh;">
@@ -641,10 +643,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg>
     </div>
     <h1>Cast Control</h1>
-    <div class="cast-status offline" id="cast-status-badge">
+    <button type="button" class="cast-status offline" id="cast-status-badge" onclick="onCastStatusClick()" title="Cast connection">
       <div class="cast-dot-ctrl"></div>
-      <span id="cast-status-label">Not Connected</span>
-    </div>
+      <span id="cast-status-label">Disconnected</span>
+    </button>
     <div class="close-ctrl-btn" onclick="closeController()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </div>
@@ -662,6 +664,9 @@
           <div class="monitor-badge-row">
             <span class="monitor-badge badge-preview">Preview</span>
             <span class="monitor-meta">PVW OUT</span>
+            <button type="button" class="mon-close-btn" onclick="event.stopPropagation();closeMonitor('preview');" title="Close Preview">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
           <div class="monitor-screen-slot">
             <div id="preview-monitor-iframe-wrap" class="presenter-frame-wrap">
@@ -672,28 +677,10 @@
             <span id="stage-bar-text" class="monitor-footer-text">Nothing shown yet</span>
           </div>
         </div>
-      </div>
-
-      <div class="mon-ctrl mon-ctrl-fadecut">
-        <button type="button" class="monitor-action-btn monitor-fade-btn" id="btn-fade" title="Fade Preview to Live">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="12" r="6" opacity=".5"/><circle cx="15" cy="12" r="6"/></svg>
-          Fade
-        </button>
-        <button type="button" class="monitor-action-btn monitor-cut-btn" id="btn-cut" title="Cut Preview to Live">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
-          Cut
-        </button>
-      </div>
-
-      <div class="mon-ctrl mon-ctrl-swap">
-        <button type="button" class="monitor-action-btn monitor-blank-btn" id="btn-blank" title="Blank Screen">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-          Blank
-        </button>
-        <button type="button" class="monitor-action-btn monitor-swap-btn" id="btn-swap" title="Swap Live/Preview position">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 10 12 5 17 10"/><polyline points="7 14 12 19 17 14"/></svg>
-          Swap
-        </button>
+        <div class="mon-reopen-strip" onclick="event.stopPropagation();reopenMonitor('preview');" title="Reopen Preview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>Preview</span>
+        </div>
       </div>
 
       <div class="monitor-card monitor-live" id="mon-card-live">
@@ -701,6 +688,9 @@
           <div class="monitor-badge-row">
             <span class="monitor-badge badge-live">Live</span>
             <span class="monitor-meta">PGM OUT</span>
+            <button type="button" class="mon-close-btn" onclick="event.stopPropagation();closeMonitor('live');" title="Close Live">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
           <div class="monitor-screen-slot">
             <div id="presenter-preview-iframe-wrap" class="presenter-frame-wrap">
@@ -712,14 +702,21 @@
             <span id="screen-indicator-label" class="monitor-footer-text">Idle</span>
           </div>
         </div>
+        <div class="mon-reopen-strip" onclick="event.stopPropagation();reopenMonitor('live');" title="Reopen Live">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>Live</span>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- DOUBLE-TAP ENLARGED PREVIEW — see setupDoubleTap()/openHoldPreview() -->
-  <div class="hold-preview-overlay" id="hold-preview-overlay" onclick="if(event.target===this)closeHoldPreview();">
-    <div class="hold-preview-box">
-      <div class="hold-preview-header">
+  <!-- FLOATING ENLARGED PREVIEW/LIVE — see setupCardInteractions()/openHoldPreview().
+       Not a modal: the overlay itself is pointer-events:none (see CSS), so the rest of
+       Cast Control stays visible and interactive; only the box captures input and can
+       be dragged anywhere on the page by its header. -->
+  <div class="hold-preview-overlay" id="hold-preview-overlay">
+    <div class="hold-preview-box" id="hold-preview-box">
+      <div class="hold-preview-header" id="hold-preview-header">
         <span id="hold-preview-title">Live</span>
         <button type="button" class="hold-preview-close-btn" onclick="closeHoldPreview()" title="Close">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -821,6 +818,36 @@
     </div>
   </div>
 
+  <!-- CAST DEVICES MODAL — device-selection UI opened from the header's Connected/
+       Disconnected button (onCastStatusClick()). Reuses the same modal chrome as Add
+       Source (.add-source-*) and the same .device-list/.device-item language already
+       used for camera device selection above — not a new component. Separate from
+       the Preview/Live enlarged floating window (#hold-preview-overlay); the two are
+       unrelated features that just happen to both be overlays. -->
+  <div class="add-source-overlay" id="cast-devices-overlay" onclick="if(event.target===this)closeCastDevicesModal();">
+    <div class="add-source-modal">
+      <div class="add-source-header">
+        <h4>Available Devices</h4>
+        <button class="icon-btn" onclick="closeCastDevicesModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="add-source-body">
+        <div class="add-source-note warn" id="cast-devices-note" style="display:none;"></div>
+        <div class="device-list" id="cast-devices-list" style="max-height:240px;"></div>
+      </div>
+      <!-- Disconnect — only shown while actually connected (toggled in
+           updateCastStatus()); routes through Android's disconnectDisplay(), the
+           JS-bridge mirror of the same dismissPresentation() path the OS itself
+           uses when a display drops on its own. -->
+      <div style="padding:0 16px 10px;flex-shrink:0;display:none;" id="cast-devices-disconnect-row">
+        <button type="button" class="btn-block btn btn-danger" id="cast-devices-disconnect-btn" onclick="disconnectCastDevice()">Disconnect</button>
+      </div>
+      <div style="display:flex;gap:8px;padding:0 16px 16px;flex-shrink:0;">
+        <button type="button" class="btn btn-secondary" id="cast-devices-refresh-btn" style="flex:1;" onclick="refreshCastDevices()">Refresh</button>
+        <button type="button" class="btn btn-secondary" style="flex:1;" onclick="openSystemCastSettings()">Cast Settings</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Edit Added Sources — manage (edit/remove) modal -->
   <div class="add-source-overlay" id="manage-sources-overlay" onclick="if(event.target===this)closeManageSourcesModal();">
     <div class="add-source-modal">
@@ -854,7 +881,8 @@
   <!-- ===== SONGS PANEL ===== -->
   <div id="panel-songs" class="ctrl-panel" style="overflow:hidden;">
     <div id="songs-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
-      <input type="hidden" id="song-fs" value="28">
+      <!-- Content font size is always automatic (auto-fit ceiling) — see AUTO_CONTENT_FONT_SIZE -->
+      <input type="hidden" id="song-fs" value="96">
       <!-- Book header — shown only when a Song Book is open -->
       <div class="book-header" id="ctrl-book-header" style="display:none;">
         <button class="icon-btn" onclick="closeCtrlBook()" style="margin-right:2px;">
@@ -906,7 +934,8 @@
           <button class="sel-btn" id="ctrl-book-btn" onclick="openPicker('book')" style="flex:2;"><span id="ctrl-book-label">John</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></button>
           <button class="sel-btn" id="ctrl-ch-btn" onclick="openPicker('chapter')" style="flex:0.7;"><span id="ctrl-ch-label">3</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></button>
         </div>
-        <input type="hidden" id="bible-fs" value="28">
+        <!-- Content font size is always automatic (auto-fit ceiling) — see AUTO_CONTENT_FONT_SIZE -->
+        <input type="hidden" id="bible-fs" value="96">
       </div>
       <div class="bible-panel-tabs">
         <div class="bible-panel-tab active" id="bpt-verses" onclick="switchBiblePanelTab('verses',this)">Verses</div>
@@ -935,16 +964,28 @@
   </div>
   </div><!-- /#ctrl-controls-wrap -->
 
-  <!-- TRANSFER — fixed action bar at the bottom of Cast Control. A separate control
-       from CUT (different placement, always accessible regardless of which tab/scroll
-       position the user is in) that performs the exact same immediate PREVIEW->LIVE
-       state update as CUT — see transferPreviewToLive(). Being a normal flex-shrink:0
-       child of body (like the header) rather than position:fixed means the tab panels
-       above it naturally get less height instead of ever being covered. -->
+  <!-- TRANSFER BAR — fixed bottom bar hosting the Preview/Live quick-actions that used
+       to live inside #monitor-grid: [SQUARE : 2 : 1 — BLANK : TRANSITION : CUT]. SWAP is
+       present but hidden unless one of Preview/Live is closed (see
+       updateMonitorGridState()). Being a normal flex-shrink:0 child of body (like the
+       header) rather than position:fixed means the tab panels above it naturally get
+       less height instead of ever being covered. #btn-transfer/#btn-fade keep their
+       original element ids (Transition/CUT are just their current labels) — nothing
+       outside this bar depends on the ids, so renaming them isn't necessary. -->
   <div id="ctrl-transfer-bar">
-    <button type="button" class="btn-block btn btn-primary" id="btn-transfer" title="Transfer Preview to Live">
+    <button type="button" class="icon-btn" id="btn-swap" style="display:none;" title="Swap Live/Preview position">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 10 12 5 17 10"/><polyline points="7 14 12 19 17 14"/></svg>
+    </button>
+    <button type="button" class="icon-btn" id="btn-blank" title="Blank Screen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+    </button>
+    <button type="button" class="btn btn-primary" id="btn-transfer" title="Transition Preview to Live">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><line x1="17" y1="12" x2="3" y2="12"/><polyline points="10 5 3 12 10 19"/><line x1="21" y1="5" x2="21" y2="19"/></svg>
-      Transfer
+      Transition
+    </button>
+    <button type="button" class="btn btn-secondary" id="btn-fade" title="CUT — instant Preview to Live, no animation">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><polyline points="13 2 4 14 12 14 11 22 20 10 12 10 13 2"/></svg>
+      CUT
     </button>
   </div>
 
@@ -1038,6 +1079,9 @@
   <div id="fab-popup-content"></div>
 </div>
 
+<!-- TOAST — small non-blocking notice; see toast()/toastWarn()/castingKeyboardWarn() -->
+<div id="toast"></div>
+
   <script>
   // ============================================================
   // DATA
@@ -1050,6 +1094,64 @@
 
   function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
   function load(k,d){try{var v=localStorage.getItem(k);return v!==null?JSON.parse(v):d;}catch(e){return d;}}
+
+  // ============================================================
+  // TOAST — mirrors index.html's own #toast/toast()/toastWarn() (same shape,
+  // same warning icon), just ported into this document since controller.html
+  // is a separate WebView/document and can't reach across into index.html's
+  // JS. One shared notification component for this file, not a one-off.
+  // ============================================================
+  var toastTimer=null;
+  function toast(msg){
+    var el=document.getElementById('toast');
+    if(!el)return;
+    el.textContent=msg;
+    el.style.display='flex';
+    if(toastTimer)clearTimeout(toastTimer);
+    toastTimer=setTimeout(function(){el.style.display='none';},2500);
+  }
+  function toastWarn(msg){
+    var el=document.getElementById('toast');
+    if(!el)return;
+    el.innerHTML='<svg fill="currentColor" viewBox="-2 -3 24 24"><path d="M12.8 1.613l6.701 11.161c.963 1.603.49 3.712-1.057 4.71a3.213 3.213 0 0 1-1.743.516H3.298C1.477 18 0 16.47 0 14.581c0-.639.173-1.264.498-1.807L7.2 1.613C8.162.01 10.196-.481 11.743.517c.428.276.79.651 1.057 1.096zM10 14a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm0-9a1 1 0 0 0-1 1v4a1 1 0 0 0 2 0V6a1 1 0 0 0-1-1z"/></svg><span>'+msg+'</span>';
+    el.style.display='flex';
+    if(toastTimer)clearTimeout(toastTimer);
+    toastTimer=setTimeout(function(){el.style.display='none';},2500);
+  }
+
+  // ============================================================
+  // CASTING KEYBOARD WARNING
+  // ----------------------------------------------------------------------------
+  // While an external display is connected, the WebView's own software keyboard
+  // is known to be unreliable on the phone screen. There's no legitimate way for
+  // JS to force the OS to show it (that would be bypassing a real platform
+  // restriction — see MainActivity's isMirroring(), the same real signal
+  // index.html already keys off for its own inputs) — normal focus() still runs
+  // exactly as the browser handles it below, this only adds an informational
+  // heads-up alongside it, via the SAME small/non-blocking toast used elsewhere
+  // in this file, throttled so rapid refocusing never spams multiple copies of
+  // the same message.
+  // ============================================================
+  var _lastKeyboardWarnAt=0;
+  function castingKeyboardWarn(){
+    var casting=false;
+    try{if(window.Android&&typeof window.Android.isMirroring==='function')casting=window.Android.isMirroring();}catch(e){}
+    if(!casting)return false;
+    var now=Date.now();
+    if(now-_lastKeyboardWarnAt<4000)return true; // already warned recently — don't spam
+    _lastKeyboardWarnAt=now;
+    toastWarn('Keyboard unavailable while casting — check the notification bar to allow it.');
+    if(navigator.vibrate)navigator.vibrate(200);
+    return true;
+  }
+  // A single delegated listener covers every text input/textarea in this
+  // document — including ones created later via innerHTML (Add Source's name
+  // field, the Bible picker's search box, etc.) — instead of wiring onfocus
+  // onto each one individually.
+  document.addEventListener('focusin',function(e){
+    var t=e.target;
+    if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'))castingKeyboardWarn();
+  });
   function stripStrongs(t){return t.replace(/<S>[^<]*<\/S>/gi,'').replace(/<f>.*?<\/f>/gi,'').replace(/<[^>]+>/g,'').replace(/\b\d{3,5}\b/g,'').replace(/\s{2,}/g,' ').trim();}
   function receiveDataSync(jsonStr){try{var data=JSON.parse(jsonStr);if(data.songs){songs=data.songs;save('songs',songs);}if(data.categories){categories=data.categories;save('categories',categories);}loadSongBooksFromStorage();renderCtrlSongsPage();}catch(e){}}
   function loadDataFromStorage(){songs=load('songs',[]);categories=load('categories',['Worship','Praise','Prayer','Faith','Thanksgiving','Others']);}
@@ -1076,21 +1178,35 @@
   // PER-TAB APPEARANCE STATE (each tab fully independent)
   // ============================================================
   // Persistent per-tab appearance — background/text colors, background images,
-  // and (Songs/Bible) heading & body typography. Saved to localStorage under
-  // 'castTabAppearance' so it survives closing/disconnecting Cast Control; see
-  // saveTabAppearance()/loadTabAppearance(), called from init().
+  // and (Songs/Bible) content typography (font weight/letter-spacing). Font
+  // SIZE is always automatic (see AUTO_CONTENT_FONT_SIZE / presenter.html's
+  // auto-fit system) — there is no per-tab size to store any more. Saved to
+  // localStorage under 'castTabAppearance' so it survives closing/
+  // disconnecting Cast Control; see saveTabAppearance()/loadTabAppearance(),
+  // called from init().
   var tabAppearance={
-    gap:   {bg:'#000000', bgImage:null, text:'#ffffff', fontSize:52},
+    gap:   {bg:'#000000', bgImage:null, text:'#ffffff'},
     songs: {bg:'#000000', bgImage:null,
-            titleColor:'#9b59b6', titleFontSize:24, titleFontWidth:0,
-            lyricColor:'#ffffff', lyricFontSize:28, lyricFontWidth:0},
+            titleColor:'#9b59b6',
+            lyricColor:'#ffffff', lyricFontWidth:0, lyricFontWeight:400,
+            hintColor:'rgba(255,255,255,0.6)'},
     bible: {bg:'#000000', bgImage:null,
-            refColor:'#9b59b6', refFontSize:22, refFontWidth:0, refWidth:100,
-            text:'#ffffff', verseFontSize:28}
+            refColor:'#9b59b6',
+            text:'#ffffff', verseFontWidth:0, verseFontWeight:400}
   };
-  // Fade duration/type — common to Songs, Bible and Sources (see Appearance
-  // panel's "Preview → Live transition" section). Also persisted.
-  var fadeSettings={duration:260,type:'fade'};
+  // The content-area auto-fit ceiling (see presenter.html's FIT_MAX_CONTENT) —
+  // always sent as-is now that there's no user font-size slider, so auto-fit
+  // is free to use the full available ceiling on every slide.
+  var AUTO_CONTENT_FONT_SIZE=96;
+  // Fade duration/type/easing — kept fully independent per category (Songs,
+  // Bible, Sources) so each one's Preview → Live transition can be tuned on
+  // its own (see Appearance panel's "Preview → Live Transition" section).
+  // Also persisted.
+  var fadeSettings={
+    songs:  {duration:260,type:'fade',easing:'ease'},
+    bible:  {duration:260,type:'fade',easing:'ease'},
+    sources:{duration:260,type:'fade',easing:'ease'}
+  };
 
   function saveTabAppearance(){save('castTabAppearance',tabAppearance);}
   function saveFadeSettings(){save('castFadeSettings',fadeSettings);}
@@ -1103,15 +1219,22 @@
     }
     var savedFade=load('castFadeSettings',null);
     if(savedFade){
-      if(savedFade.duration!=null)fadeSettings.duration=savedFade.duration;
-      if(savedFade.type)fadeSettings.type=savedFade.type;
+      if(savedFade.duration!=null||savedFade.type){
+        // Legacy single-bucket shape (pre category-split) — seed all three
+        // categories from it so existing users keep their prior setting.
+        ['songs','bible','sources'].forEach(function(cat){
+          if(savedFade.duration!=null)fadeSettings[cat].duration=savedFade.duration;
+          if(savedFade.type)fadeSettings[cat].type=savedFade.type;
+        });
+      } else {
+        ['songs','bible','sources'].forEach(function(cat){
+          var s=savedFade[cat];if(!s)return;
+          if(s.duration!=null)fadeSettings[cat].duration=s.duration;
+          if(s.type)fadeSettings[cat].type=s.type;
+          if(s.easing)fadeSettings[cat].easing=s.easing;
+        });
+      }
     }
-  }
-
-  function syncAppearanceToDOM(){
-    document.getElementById('gap-fs').value=tabAppearance.gap.fontSize;
-    document.getElementById('song-fs').value=tabAppearance.songs.lyricFontSize;
-    document.getElementById('bible-fs').value=tabAppearance.bible.verseFontSize;
   }
 
   // ---- Generic field-based color get/set — any tabAppearance[tab][field] that
@@ -1134,23 +1257,156 @@
     currentSongId:null,currentStanzaIdx:-1,currentStanzas:[],
     bibleVersion:'KJV',bibleBook:43,bibleChapter:3,bibleVerses:[],
     currentVerseIdx:-1,recentVerses:[],biblePanelTab:'verses',
-    castActive:false,
+    castActive:false, castDeviceName:null,
     preview:null, // the content currently shown on the real Preview surface (about to go live)
     live:null      // {kind:'song',songId,stanzaIdx} | {kind:'bible',vn,bookN,ch,ver} | {kind:'source',sourceId} — what's actually on air
   };
   var pickerMode=''; var pickerAllItems=[];
 
   // ============================================================
-  // CAST STATUS
+  // CAST STATUS + DEVICE PICKER
+  // ----------------------------------------------------------------------------
+  // This app's only real "connection" is Android's own DisplayManager Presentation
+  // API (see MainActivity.java) — there is no Bluetooth/WiFi/Cast-SDK peer discovery
+  // anywhere in this project (confirmed: zero Gradle dependencies, and the Sources
+  // tab's own "Wireless" source type already says as much). So:
+  //   - getAvailableDisplays() lists whatever the OS already knows about as a
+  //     presentation-capable display (a real Miracast/Cast receiver or HDMI output
+  //     already connected at the OS level) — real names, never invented ones.
+  //   - openCastSettings() hands off to the OS's own Cast/Wireless-Display settings,
+  //     since actual nearby-device discovery happens there, not inside this app.
+  //   - connectToDisplayId()/updateCastStatus()/onCastConnectFailed() mirror the
+  //     existing async native-bridge callback pattern already used everywhere else
+  //     in this file (see e.g. onPresenterViewport/receiveTheme).
   // ============================================================
-  function updateCastStatus(active){
+  var _castKnownDevices=[];   // last getAvailableDisplays() result: [{id,name}]
+  var _castConnectingId=null; // device id currently mid-connection-attempt, or null
+  function _truncateDeviceName(name){
+    if(!name)return'';
+    return name.length>6?(name.slice(0,6)+'...'):name;
+  }
+  function updateCastStatus(active,deviceName){
     ctrlState.castActive=active;
+    ctrlState.castDeviceName=active?(deviceName||null):null;
+    if(active)_castConnectingId=null; // a real connection landed — any "Connecting…" row is done
     var badge=document.getElementById('cast-status-badge');
     var label=document.getElementById('cast-status-label');
-    if(active){badge.className='cast-status live';label.textContent='Connected';}
-    else{badge.className='cast-status offline';label.textContent='Disconnected';}
+    if(active){
+      badge.className='cast-status live';
+      if(ctrlState.castDeviceName){
+        label.textContent='Connected to '+_truncateDeviceName(ctrlState.castDeviceName);
+        badge.title='Connected to '+ctrlState.castDeviceName;
+      } else {
+        label.textContent='Connected';
+        badge.title='Connected';
+      }
+    } else {
+      badge.className='cast-status offline';
+      label.textContent='Disconnected';
+      badge.title='Disconnected';
+    }
+    var discRow=document.getElementById('cast-devices-disconnect-row');
+    if(discRow)discRow.style.display=active?'':'none';
+    renderCastDevicesList();
   }
-  function onPresenterStateChanged(isOpen){updateCastStatus(isOpen);}
+  function onPresenterStateChanged(isOpen){updateCastStatus(isOpen,isOpen?ctrlState.castDeviceName:null);}
+
+  function onCastStatusClick(){
+    openCastDevicesModal();
+    refreshCastDevices();
+  }
+  function openCastDevicesModal(){
+    var overlay=document.getElementById('cast-devices-overlay');
+    if(overlay)overlay.classList.add('open');
+    renderCastDevicesList();
+  }
+  function closeCastDevicesModal(){
+    var overlay=document.getElementById('cast-devices-overlay');
+    if(overlay)overlay.classList.remove('open');
+  }
+  function _safeParseDisplayList(json){
+    try{var arr=JSON.parse(json);return Array.isArray(arr)?arr:[];}catch(e){return[];}
+  }
+  function refreshCastDevices(){
+    var refreshBtn=document.getElementById('cast-devices-refresh-btn');
+    if(refreshBtn){refreshBtn.disabled=true;refreshBtn.textContent='Refreshing…';}
+    // Small delay purely so the loading state is actually perceptible — the native
+    // query itself is effectively instant (DisplayManager already tracks this).
+    setTimeout(function(){
+      _castKnownDevices=(window.Android&&typeof window.Android.getAvailableDisplays==='function')
+        ? _safeParseDisplayList(window.Android.getAvailableDisplays()) : [];
+      renderCastDevicesList();
+      if(refreshBtn){refreshBtn.disabled=false;refreshBtn.textContent='Refresh';}
+    },260);
+  }
+  function _setCastNote(text,isWarn){
+    var note=document.getElementById('cast-devices-note');
+    if(!note)return;
+    if(!text){note.style.display='none';return;}
+    note.style.display='';
+    note.className=isWarn===false?'add-source-note':'add-source-note warn';
+    note.textContent=text;
+  }
+  function renderCastDevicesList(){
+    var list=document.getElementById('cast-devices-list');
+    if(!list)return;
+    if(!window.Android||typeof window.Android.getAvailableDisplays!=='function'){
+      list.innerHTML='';
+      _setCastNote('Device discovery is only available inside the Android app shell.');
+      return;
+    }
+    if(!_castKnownDevices.length){
+      list.innerHTML='';
+      _setCastNote("No connected displays found. This app can't scan for nearby devices itself — use Cast Settings below (or your system Quick Settings) to pair one, then tap Refresh.");
+      return;
+    }
+    _setCastNote(null);
+    list.innerHTML=_castKnownDevices.map(function(d){
+      var isConnected=ctrlState.castActive&&ctrlState.castDeviceName===d.name;
+      var isConnecting=_castConnectingId===d.id;
+      var cls='device-item'+(isConnected?' active':'');
+      var label=escH(d.name||('Display '+d.id));
+      if(isConnecting)label+=' — Connecting…';
+      else if(isConnected)label+=' — Connected';
+      return '<div class="'+cls+'" onclick="connectToCastDevice('+JSON.stringify(d.id)+')">'+label+'</div>';
+    }).join('');
+  }
+  function connectToCastDevice(id){
+    if(!window.Android||typeof window.Android.connectToDisplayId!=='function')return;
+    _castConnectingId=id;
+    _setCastNote(null);
+    renderCastDevicesList();
+    var started=window.Android.connectToDisplayId(id);
+    if(!started){
+      _castConnectingId=null;
+      _setCastNote('That display is no longer available. Try Refresh.');
+      renderCastDevicesList();
+    }
+    // On success, updateCastStatus(true,name) arrives asynchronously from Android.
+    // On failure, onCastConnectFailed(name) arrives instead — see below. Either way
+    // the user stays in this picker; the main button is never updated speculatively.
+  }
+  function onCastConnectFailed(deviceName){
+    _castConnectingId=null;
+    _setCastNote('Could not connect to '+(deviceName||'that display')+'. It may have disconnected — try Refresh.');
+    renderCastDevicesList();
+  }
+  // Explicit Disconnect — Android's disconnectDisplay() does the actual
+  // permission-scoped display teardown (dismissPresentation()) and reports the
+  // result back through the exact same updateCastStatus(false,null) callback
+  // already used everywhere else (OS-initiated drops included), so there's
+  // nothing to update speculatively here.
+  function disconnectCastDevice(){
+    if(!window.Android||typeof window.Android.disconnectDisplay!=='function')return;
+    window.Android.disconnectDisplay();
+  }
+  function openSystemCastSettings(){
+    if(!window.Android||typeof window.Android.openCastSettings!=='function')return;
+    var opened=window.Android.openCastSettings();
+    if(!opened){
+      _setCastNote("This device doesn't expose Cast/Wireless Display settings to apps. Open your system Quick Settings and use Cast/Smart View to pair a display, then tap Refresh here.");
+    }
+  }
 
   // ============================================================
   // SCREEN INDICATOR
@@ -1193,7 +1449,12 @@
   // WebRTC capture.
   // ============================================================
   function _copyArgs(args){return Array.prototype.slice.call(args||[]);}
-  function _isPresenterScreenCall(fnName){return fnName==='showContent'||fnName==='showGap'||fnName==='clearDisplay'||fnName==='showSplit'||fnName==='showCamera'||fnName==='showPdf';}
+  // One-shot flag: true only for the duration of CUT's single goLive() call (see
+  // cutPreviewToLive() below), read by _syncFrameTransition()/_syncAndroidTransition()
+  // so that ONE screen change is flagged instant to presenter.html without ever
+  // touching fadeSettings (the persistent, user-configured Transition settings).
+  var _instantTransferInFlight=false;
+  function _isPresenterScreenCall(fnName){return fnName==='showContent'||fnName==='showGap'||fnName==='clearDisplay'||fnName==='showSplit'||fnName==='showCamera'||fnName==='showPdf'||fnName==='clearOverlay';}
 
   function _runFrameCall(iframeId,fnName,args){
     try{
@@ -1206,18 +1467,44 @@
     return false;
   }
 
+  // Pushes the currently-selected Preview → Live Transition (see fadeSettings/
+  // _currentTransitionCategory() below) into a presenter.html instance right
+  // before it's told to change what's on screen, so its own animateLayer()
+  // performs the SAME type/duration/easing instead of a fixed built-in fade —
+  // shared by the Preview iframe, the Live iframe, AND (via _syncAndroidTransition)
+  // the real external cast display, rather than three separate implementations.
+  // The 4th arg (instant) is normally false — CUT (see cutPreviewToLive() below)
+  // briefly sets _instantTransferInFlight around its one goLive() call so THIS
+  // specific screen change skips presenter.html's animation entirely, without
+  // touching fadeSettings/the configured type-duration-easing at all.
+  function _syncFrameTransition(iframeId){
+    var fs=fadeSettings[_currentTransitionCategory()]||fadeSettings.songs;
+    _runFrameCall(iframeId,'setSlideTransition',[fs.type,fs.duration,fs.easing,_instantTransferInFlight]);
+  }
+  function _syncAndroidTransition(){
+    if(window.Android&&typeof window.Android.setTransition==='function'){
+      var fs=fadeSettings[_currentTransitionCategory()]||fadeSettings.songs;
+      window.Android.setTransition(fs.type,fs.duration,fs.easing,_instantTransferInFlight);
+    }
+  }
+
   // ---- LIVE iframe (program out — mirrors the real audience display) ----
   var _lastPresenterCall=null;
   var _lastPresenterFontSize=null;
   function presenterCall(fnName,args){
     args=_copyArgs(args);
-    if(_isPresenterScreenCall(fnName))_lastPresenterCall={fnName:fnName,args:args.slice()};
+    if(_isPresenterScreenCall(fnName)){
+      _lastPresenterCall={fnName:fnName,args:args.slice()};
+      _syncFrameTransition('presenter-iframe');
+      _syncAndroidTransition(); // goLive()/pushSplitToPresenter() always call presenterCall alongside the real Android bridge call
+    }
     if(fnName==='updateFontSize'&&args.length)_lastPresenterFontSize=args[0];
     return _runFrameCall('presenter-iframe',fnName,args);
   }
   function replayPresenterPreview(){
     syncPreviewScale();
     if(_lastPresenterCall){
+      _syncFrameTransition('presenter-iframe');
       _runFrameCall('presenter-iframe',_lastPresenterCall.fnName,_lastPresenterCall.args.slice());
       if(_lastPresenterFontSize!==null)_runFrameCall('presenter-iframe','updateFontSize',[_lastPresenterFontSize]);
     }
@@ -1234,13 +1521,17 @@
   var _lastPreviewFontSize=null;
   function previewCall(fnName,args){
     args=_copyArgs(args);
-    if(_isPresenterScreenCall(fnName))_lastPreviewCall={fnName:fnName,args:args.slice()};
+    if(_isPresenterScreenCall(fnName)){
+      _lastPreviewCall={fnName:fnName,args:args.slice()};
+      _syncFrameTransition('preview-iframe');
+    }
     if(fnName==='updateFontSize'&&args.length)_lastPreviewFontSize=args[0];
     return _runFrameCall('preview-iframe',fnName,args);
   }
   function replayPreviewFrame(){
     syncPreviewScale();
     if(_lastPreviewCall){
+      _syncFrameTransition('preview-iframe');
       _runFrameCall('preview-iframe',_lastPreviewCall.fnName,_lastPreviewCall.args.slice());
       if(_lastPreviewFontSize!==null)_runFrameCall('preview-iframe','updateFontSize',[_lastPreviewFontSize]);
     }
@@ -1253,11 +1544,11 @@
   }
 
   // ============================================================
-  // PRESENT NOW — Songs and normal Bible present immediately: the selected
-  // slide/verse becomes the active presentation in both Preview and Live in
-  // one step (presentNow = setPreview + goLive together). There is no
-  // separate "Go Live" action for normal Song/Bible content — Preview simply
-  // always mirrors what's live, like a program/preview monitor pair.
+  // PRESENT NOW — Songs and normal Bible present immediately to LIVE ONLY: the
+  // selected slide/verse goes straight to goLive() via an explicit payload,
+  // never touching ctrlState.preview/the Preview monitor. Preview is reserved
+  // for Source management (see stageSourceToPreview/sendSourceLive below) —
+  // Sources are the only thing that still stage through setPreview() first.
   // (The Split tab bypasses this pattern entirely — see BIBLE SPLIT below.)
   // ============================================================
   function setPreview(payload){
@@ -1279,10 +1570,19 @@
     ctrlState.recentVerses.unshift(entry);
     if(ctrlState.recentVerses.length>10)ctrlState.recentVerses.length=10;
   }
-  function goLive(){
-    var s=ctrlState.preview;if(!s)return;
-    if(window.Android&&typeof window.Android[s.androidFn]==='function')window.Android[s.androidFn].apply(window.Android,s.androidArgs);
+  // payload: when passed directly (Songs/Bible via presentNow — see below),
+  // goLive applies it straight to Live without ever reading/touching
+  // ctrlState.preview. Omitted, it falls back to whatever's staged in
+  // ctrlState.preview (Sources' sendSourceLive, and Fade/Transfer replaying
+  // Preview's last content onto Live) — the original behavior for those.
+  function goLive(payload){
+    var s=payload||ctrlState.preview;if(!s)return;
+    // presenterCall() first: it syncs the current transition (see
+    // _syncAndroidTransition()) to the real cast display before the Android
+    // bridge call below actually changes what's on screen there, so that
+    // change picks up the right transition instead of the previous one.
     presenterCall(s.presenterFn,s.presenterArgs);
+    if(window.Android&&typeof window.Android[s.androidFn]==='function')window.Android[s.androidFn].apply(window.Android,s.androidArgs);
     if(s.kind==='song'){
       ctrlState.live={kind:'song',songId:s.songId,stanzaIdx:s.stanzaIdx};
       updateScreenIndicator('song',s.indicatorDetail);
@@ -1302,28 +1602,60 @@
       renderSourcesList();
     }
   }
-  function presentNow(payload){setPreview(payload);goLive();}
+  function presentNow(payload){goLive(payload);}
 
   // ============================================================
-  // SWAP / FADE / CUT — Live/Preview monitor controls.
-  // Swap only exchanges which row is drawn on top/bottom (via CSS order); it
-  // never touches ctrlState or which iframe is "Live" vs "Preview", so
-  // content/state is untouched and it cleanly reverses on a second click.
-  // Fade/Cut both push Preview's current content onto Live: for normal
-  // Song/Bible content that's already staged in ctrlState.preview, goLive()
-  // is reused (identical to how presentNow already drives Live); for content
-  // that bypasses that staging (e.g. Split Bible, which pushes straight to
-  // both surfaces already) it falls back to replaying Preview's last render
-  // call onto the Live iframe. Fade wraps the swap in a brief opacity
-  // transition; Cut applies it immediately.
+  // SWAP / TRANSITION / CUT — Live/Preview monitor controls.
+  // Swap only exchanges which grid-area each card is drawn in (see
+  // #monitor-grid.mon-swapped in the CSS); it never touches ctrlState or which
+  // iframe is "Live" vs "Preview", so content/state is untouched and it cleanly
+  // reverses on a second call. Used by both the SWAP button and drag-to-swap
+  // (see setupCardInteractions() below). Transition (#btn-transfer) and CUT
+  // (#btn-fade) both push Preview's current content onto Live: Preview now
+  // only ever holds staged Source content (Songs/Bible go straight to Live —
+  // see PRESENT NOW above), so in practice that's what these apply to, via the
+  // same ctrlState.preview-reading goLive() sendSourceLive() already uses; for
+  // content that bypasses staging entirely (e.g. Split Bible, which pushes
+  // straight to both surfaces already) it falls back to replaying Preview's
+  // last render call onto the Live iframe. Both buttons call the exact same
+  // immediate, non-animated transferPreviewToLive() — CUT must never use the
+  // animated fadePreviewToLive() path (no fade, no configured transition
+  // duration; that helper is kept for its _transferPreviewToLive(true) primitive
+  // but nothing currently binds it to a button).
   // ============================================================
   function toggleSwapLivePreview(){
     var grid=document.getElementById('monitor-grid');
     if(!grid)return;
+    // When exactly one window is closed, "swap" means something different: there's
+    // only one physical slot in play, so exchanging grid-areas alone would just
+    // move the SAME visible window into the other slot while it stays the same
+    // window on screen — not what SWAP means here. With one closed, SWAP instead
+    // needs to flip which of Preview/Live is the visible one WITHOUT moving the
+    // hidden window's reopen-strip to the other physical side. The reopen strip's
+    // physical side is derived from AREA (see area-preview-closed/area-live-closed
+    // in the CSS + updateMonitorGridState below), which is itself a function of
+    // BOTH monitorClosedState and .mon-swapped — so flipping monitorClosedState
+    // alone (old behavior) changes which area is closed and the strip jumps sides;
+    // toggling .mon-swapped alone would do the same in the other direction. Doing
+    // BOTH together cancels out: the closed/open AREA stays put, while the CARD
+    // (and therefore the Live/Preview content) occupying each area swaps — i.e.
+    // tabs/roles swap, physical position of the hidden button does not. With both
+    // open (the normal case, including drag-to-swap), behavior is unchanged:
+    // exchange grid-areas via .mon-swapped as before.
+    var oneClosed=(monitorClosedState.preview||monitorClosedState.live)&&!(monitorClosedState.preview&&monitorClosedState.live);
+    if(oneClosed){
+      var closedKind=monitorClosedState.preview?'preview':'live';
+      var openKind=closedKind==='preview'?'live':'preview';
+      monitorClosedState[closedKind]=false;
+      monitorClosedState[openKind]=true;
+      save(closedKind==='preview'?'monitorClosedPreview':'monitorClosedLive',false);
+      save(openKind==='preview'?'monitorClosedPreview':'monitorClosedLive',true);
+    }
     var swapped=grid.classList.toggle('mon-swapped');
     save('monitorSwapped',swapped);
     var swapBtn=document.getElementById('btn-swap');
     if(swapBtn)swapBtn.classList.toggle('active',swapped);
+    updateMonitorGridState();
   }
   // The out/in transform pairs Fade's animation type applies to the Live wrap
   // while its content swaps — 'fade' is opacity-only (no transform), matching
@@ -1333,6 +1665,19 @@
     slide: {out:'translateX(24px)', into:'translateX(0)'},
     zoom:  {out:'scale(.92)',       into:'scale(1)'}
   };
+  // Which category's Preview → Live Transition settings govern the transition
+  // currently in flight — Songs/Bible/Sources are fully independent (see
+  // fadeSettings above). Preview's own staged content is the primary signal
+  // (kind:'song'|'bible'|'source'); content that bypasses staging (Split
+  // Bible pushes straight to both surfaces) falls back to whichever tab is
+  // currently active, since that's always where such content lives.
+  function _currentTransitionCategory(){
+    var k=ctrlState.preview&&ctrlState.preview.kind;
+    if(k==='song')return 'songs';
+    if(k==='bible')return 'bible';
+    if(k==='source')return 'sources';
+    return getCurrentTab();
+  }
   function _transferPreviewToLive(animate){
     function apply(){
       if(ctrlState.preview){
@@ -1344,11 +1689,14 @@
     }
     var wrap=document.getElementById('presenter-preview-iframe-wrap');
     if(animate&&wrap){
-      var t=FADE_TYPE_TRANSFORMS[fadeSettings.type]||FADE_TYPE_TRANSFORMS.fade;
-      var ms=fadeSettings.duration||260;
-      // Only opacity/transform borrow the configurable duration — width's own
-      // .18s (used by the live-resize handle) is left untouched.
-      wrap.style.transition='opacity '+ms+'ms ease, transform '+ms+'ms ease, width .18s ease';
+      var cat=_currentTransitionCategory();
+      var fs=fadeSettings[cat]||fadeSettings.songs;
+      var t=FADE_TYPE_TRANSFORMS[fs.type]||FADE_TYPE_TRANSFORMS.fade;
+      var ms=fs.duration||0;
+      var ease=fs.easing||'ease';
+      // Only opacity/transform borrow the configurable duration/easing — width's
+      // own .18s (used by the live-resize handle) is left untouched.
+      wrap.style.transition='opacity '+ms+'ms '+ease+', transform '+ms+'ms '+ease+', width .18s ease';
       wrap.style.opacity='0';
       wrap.style.transform=t.out;
       setTimeout(function(){
@@ -1361,12 +1709,24 @@
     }
   }
   function fadePreviewToLive(){_transferPreviewToLive(true);}
-  function cutPreviewToLive(){_transferPreviewToLive(false);}
-  // TRANSFER (fixed bottom bar) — a separate control from CUT (different placement,
-  // always reachable regardless of scroll/tab), but reuses the exact same immediate
-  // PREVIEW->LIVE state update via _transferPreviewToLive(false) rather than any
-  // duplicated logic.
   function transferPreviewToLive(){_transferPreviewToLive(false);}
+  // CUT — reuses the exact same immediate (non-animated) transfer path as
+  // Transition/transferPreviewToLive() above (same goLive()/apply(), same
+  // Sources-only content it already operates on); the ONLY difference is that
+  // _instantTransferInFlight is set for the duration of that one call, which
+  // _syncFrameTransition()/_syncAndroidTransition() (above) pick up and forward
+  // to presenter.html as a one-shot "skip animateLayer() entirely" flag — see
+  // presenter.html's _transInstant. This never reads or modifies fadeSettings,
+  // so the configured Transition type/duration/easing is completely untouched
+  // and Transition itself keeps behaving exactly as before.
+  function cutPreviewToLive(){
+    _instantTransferInFlight=true;
+    try{
+      transferPreviewToLive();
+    } finally {
+      _instantTransferInFlight=false;
+    }
+  }
   (function(){
     var grid=document.getElementById('monitor-grid');
     if(grid&&load('monitorSwapped',false)){
@@ -1377,25 +1737,120 @@
   })();
 
   // ============================================================
-  // DOUBLE-TAP ENLARGED PREVIEW — double-tapping Live or Preview opens a
-  // large-screen inspection popup (with an explicit Close button); a single
-  // tap is left alone so it still performs whatever normal interaction that
-  // window has. Works via Pointer Events so mouse and touch share one
-  // implementation, and a matched pointerdown/pointerup pair within a small
-  // movement tolerance is required for each tap so a drag/scroll never
-  // counts. The popup itself never touches ctrlState/_lastPresenterCall/
-  // _lastPreviewCall — it only reads them.
+  // OPEN/CLOSE — Preview and Live can each be independently closed; closing one
+  // collapses its grid track to a slim reopen strip (.mon-reopen-strip) and lets
+  // the other window use the freed space. Closing both is disallowed — there'd be
+  // nothing left to look at. Persisted the same way monitorSwapped already is.
   // ============================================================
-  var DOUBLE_TAP_MS=320, DOUBLE_TAP_MOVE_TOLERANCE=12;
-  function setupDoubleTap(el,kind){
+  var monitorClosedState={preview:load('monitorClosedPreview',false),live:load('monitorClosedLive',false)};
+  if(monitorClosedState.preview&&monitorClosedState.live)monitorClosedState.live=false; // guard a corrupted saved state
+  function _monitorCardEl(kind){return document.getElementById(kind==='live'?'mon-card-live':'mon-card-preview');}
+  function updateMonitorGridState(){
+    var grid=document.getElementById('monitor-grid');
+    if(!grid)return;
+    var previewCard=_monitorCardEl('preview'),liveCard=_monitorCardEl('live');
+    if(previewCard)previewCard.classList.toggle('mon-closed',monitorClosedState.preview);
+    if(liveCard)liveCard.classList.toggle('mon-closed',monitorClosedState.live);
+    // Grid tracks are named "preview"/"live" by AREA, not by which card currently
+    // holds it — when swapped, the card holding a given area flips, so which
+    // physical area is "closed" has to be derived from both closed-state and swap.
+    var swapped=grid.classList.contains('mon-swapped');
+    var previewAreaClosed=swapped?monitorClosedState.live:monitorClosedState.preview;
+    var liveAreaClosed=swapped?monitorClosedState.preview:monitorClosedState.live;
+    grid.classList.toggle('area-preview-closed',previewAreaClosed&&!liveAreaClosed);
+    grid.classList.toggle('area-live-closed',liveAreaClosed&&!previewAreaClosed);
+    // Drag-to-swap only makes sense when both windows are open; when one is closed
+    // the SWAP button becomes the only way to swap (setupCardInteractions below
+    // also reads monitorClosedState to disable the drag gesture itself).
+    var oneClosed=(monitorClosedState.preview||monitorClosedState.live)&&!(monitorClosedState.preview&&monitorClosedState.live);
+    var swapBtn=document.getElementById('btn-swap');
+    if(swapBtn)swapBtn.style.display=oneClosed?'':'none';
+    syncPreviewScale();
+  }
+  function closeMonitor(kind){
+    var other=kind==='preview'?'live':'preview';
+    if(monitorClosedState[other]){
+      // The other window is already closed — closing this one too would leave
+      // nothing visible. toggleSwapLivePreview() already has a dedicated "one
+      // closed" path (see above) that flips which of Preview/Live is the visible
+      // one, which is exactly Swap's behavior in this state — reuse it instead of
+      // a second implementation.
+      toggleSwapLivePreview();
+      return;
+    }
+    monitorClosedState[kind]=true;
+    save(kind==='preview'?'monitorClosedPreview':'monitorClosedLive',true);
+    updateMonitorGridState();
+  }
+  function reopenMonitor(kind){
+    monitorClosedState[kind]=false;
+    save(kind==='preview'?'monitorClosedPreview':'monitorClosedLive',false);
+    updateMonitorGridState();
+  }
+  updateMonitorGridState();
+
+  // ============================================================
+  // DOUBLE-TAP ENLARGED PREVIEW + HOLD-AND-DRAG TO SWAP — one gesture family on
+  // each monitor card handles three outcomes:
+  //   - a plain tap:                            left alone (no built-in behavior)
+  //   - two taps within DOUBLE_TAP_MS:           openHoldPreview(kind) — floating view
+  //   - press + drag past DRAG_THRESHOLD, released over the OTHER card: swap
+  // Works via Pointer Events so mouse and touch share one implementation. Once a
+  // gesture crosses the drag threshold it commits to being a drag for the rest of
+  // that pointer's lifetime, so a drag can never also register as a tap (and a
+  // real tap never moves far enough to cross the drag threshold either). The
+  // resize handle (#preview-resize-handle) is a completely separate element with
+  // its own pointer listeners, so dragging a card can never be confused with
+  // resizing, and vice versa. The popup itself never touches ctrlState/
+  // _lastPresenterCall/_lastPreviewCall — it only reads them.
+  // ============================================================
+  var DOUBLE_TAP_MS=320, DOUBLE_TAP_MOVE_TOLERANCE=12, DRAG_THRESHOLD=16;
+  function setupCardInteractions(el,kind){
     if(!el)return;
-    var lastTapTime=0,lastTapX=0,lastTapY=0,downX=0,downY=0;
-    el.addEventListener('pointerdown',function(e){
-      if(e.pointerType==='mouse'&&e.button!==0)return;
-      downX=e.clientX;downY=e.clientY;
-    });
-    el.addEventListener('pointerup',function(e){
-      if(e.pointerType==='mouse'&&e.button!==0)return;
+    var lastTapTime=0,lastTapX=0,lastTapY=0;
+    var downX=0,downY=0,pointerId=null,dragging=false,dragEnabled=false;
+    function otherCardEl(){return document.getElementById(kind==='preview'?'mon-card-live':'mon-card-preview');}
+    function onMove(e){
+      if(e.pointerId!==pointerId)return;
+      var dx=e.clientX-downX,dy=e.clientY-downY;
+      if(!dragging&&dragEnabled&&Math.hypot(dx,dy)>DRAG_THRESHOLD){
+        dragging=true;
+        el.classList.add('mon-dragging');
+      }
+      if(dragging){
+        el.style.transform='translate('+dx+'px,'+dy+'px)';
+        var other=otherCardEl();
+        if(other){
+          var r=other.getBoundingClientRect();
+          var over=e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom;
+          other.classList.toggle('mon-drop-target',over);
+        }
+        e.preventDefault();
+      }
+    }
+    function cleanupDrag(){
+      el.removeEventListener('pointermove',onMove);
+      el.classList.remove('mon-dragging');
+      el.style.transform='';
+      var other=otherCardEl();
+      if(other)other.classList.remove('mon-drop-target');
+      if(pointerId!=null){try{el.releasePointerCapture(pointerId);}catch(err){}}
+    }
+    function onCancel(){cleanupDrag();dragging=false;}
+    function onUp(e){
+      if(e.pointerId!==pointerId)return;
+      if(dragging){
+        var other=otherCardEl(),doSwap=false;
+        if(other){
+          var r=other.getBoundingClientRect();
+          doSwap=e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom;
+        }
+        cleanupDrag();
+        dragging=false;
+        if(doSwap)toggleSwapLivePreview();
+        return;
+      }
+      cleanupDrag();
       if(Math.abs(e.clientX-downX)>DOUBLE_TAP_MOVE_TOLERANCE||Math.abs(e.clientY-downY)>DOUBLE_TAP_MOVE_TOLERANCE)return;
       var now=Date.now();
       var isDoubleTap=(now-lastTapTime)<=DOUBLE_TAP_MS&&Math.abs(e.clientX-lastTapX)<=DOUBLE_TAP_MOVE_TOLERANCE&&Math.abs(e.clientY-lastTapY)<=DOUBLE_TAP_MOVE_TOLERANCE;
@@ -1406,57 +1861,170 @@
       } else {
         lastTapTime=now;lastTapX=e.clientX;lastTapY=e.clientY;
       }
+    }
+    el.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      if(monitorClosedState[kind])return; // closed card shows the reopen strip instead
+      downX=e.clientX;downY=e.clientY;pointerId=e.pointerId;dragging=false;
+      dragEnabled=!monitorClosedState.preview&&!monitorClosedState.live;
+      try{el.setPointerCapture(pointerId);}catch(err){}
+      el.addEventListener('pointermove',onMove);
+      el.addEventListener('pointerup',onUp,{once:true});
+      el.addEventListener('pointercancel',onCancel,{once:true});
     });
   }
 
-  var _holdPreviewFrameSeq=0;
+  var _holdPreviewPos=null, _holdPreviewSource=null; // {wrap,originalParent,placeholder,kind}
+  // Moves the REAL Preview/Live iframe wrap into the floating window instead of
+  // cloning/recreating an iframe — the exact same DOM node keeps receiving the exact
+  // same goLive()/setPreview() calls (they always target 'presenter-iframe'/
+  // 'preview-iframe' by id, and getElementById finds an element regardless of where
+  // it currently sits in the document), so the floating view is the actual live
+  // output, continuously updating, never a static last-frame snapshot, and there's
+  // only ever one rendering source per kind — nothing to fall out of sync. A
+  // placeholder is left behind in the monitor card's slot so it doesn't look broken
+  // while its real content is floating.
   function openHoldPreview(kind){
     var overlay=document.getElementById('hold-preview-overlay');
+    var box=document.getElementById('hold-preview-box');
     var body=document.getElementById('hold-preview-body');
     var title=document.getElementById('hold-preview-title');
-    if(!overlay||!body||!title)return;
-    body.innerHTML='';
+    if(!overlay||!box||!body||!title)return;
+    if(_holdPreviewSource&&_holdPreviewSource.kind===kind)return; // already showing this one — avoid a duplicate popup
+    if(_holdPreviewSource)_restoreHoldPreviewSource();
+    var wrapId=kind==='live'?'presenter-preview-iframe-wrap':'preview-monitor-iframe-wrap';
+    var wrap=document.getElementById(wrapId);
+    var originalParent=wrap&&wrap.parentElement; // the real monitor's .monitor-screen-slot
+    if(!wrap||!originalParent)return;
+    var placeholder=document.createElement('div');
+    placeholder.className='mon-enlarged-placeholder';
+    placeholder.innerHTML='<span>Enlarged view open</span>';
+    originalParent.replaceChild(placeholder,wrap);
     title.textContent=(kind==='live'?'Live':'Preview')+' — Enlarged View';
-    var seq=(++_holdPreviewFrameSeq);
-    var wrapId='hold-preview-frame-wrap-'+seq, ifrmId='hold-preview-frame-'+seq;
+    body.innerHTML='';
     var slot=document.createElement('div');
     slot.className='monitor-screen-slot';
-    var wrap=document.createElement('div');
-    wrap.className='presenter-frame-wrap'; wrap.id=wrapId; wrap.style.aspectRatio='16/9';
-    var ifrm=document.createElement('iframe');
-    ifrm.id=ifrmId; ifrm.scrolling='no'; ifrm.src='presenter.html#preview';
-    wrap.appendChild(ifrm); slot.appendChild(wrap); body.appendChild(slot);
-    var lastCall=kind==='live'?_lastPresenterCall:_lastPreviewCall;
-    var lastFs=kind==='live'?_lastPresenterFontSize:_lastPreviewFontSize;
-    ifrm.addEventListener('load',function(){
-      setTimeout(function(){
-        _syncFrameScale(wrapId,ifrmId);
-        if(lastCall)_runFrameCall(ifrmId,lastCall.fnName,lastCall.args.slice());
-        if(lastFs!==null)_runFrameCall(ifrmId,'updateFontSize',[lastFs]);
-      },40);
-    });
+    slot.appendChild(wrap);
+    body.appendChild(slot);
+    _holdPreviewSource={wrap:wrap,originalParent:originalParent,placeholder:placeholder,kind:kind};
     overlay.classList.add('open');
+    // Floating window keeps whatever position the user last dragged it to within
+    // this session; the very first open centers it on the page.
+    requestAnimationFrame(function(){
+      var r=box.getBoundingClientRect();
+      if(_holdPreviewPos){
+        box.style.left=_holdPreviewPos.left+'px';
+        box.style.top=_holdPreviewPos.top+'px';
+      } else {
+        var left=Math.max(0,(window.innerWidth-r.width)/2);
+        var top=Math.max(0,(window.innerHeight-r.height)/2);
+        box.style.left=left+'px';
+        box.style.top=top+'px';
+        _holdPreviewPos={left:left,top:top};
+      }
+      syncPreviewScale(); // re-fit the moved wrap to its new (floating) container
+    });
+  }
+  function _restoreHoldPreviewSource(){
+    if(!_holdPreviewSource)return;
+    var s=_holdPreviewSource;
+    _holdPreviewSource=null;
+    if(s.placeholder.parentElement)s.placeholder.parentElement.replaceChild(s.wrap,s.placeholder);
+    else s.originalParent.appendChild(s.wrap);
+    syncPreviewScale(); // re-fit the returned wrap back to its normal monitor-card size
   }
   function closeHoldPreview(){
     var overlay=document.getElementById('hold-preview-overlay');
     if(overlay)overlay.classList.remove('open');
+    _restoreHoldPreviewSource();
   }
-  setupDoubleTap(document.getElementById('mon-card-live'),'live');
-  setupDoubleTap(document.getElementById('mon-card-preview'),'preview');
+  // Draggable floating window — the ENTIRE window surface is draggable, not just the
+  // header (interactive controls opt out via _isHoldPreviewControl() below — today
+  // that's just the close button, but the check is general so it also covers any
+  // future control added inside); the video itself never intercepts the gesture
+  // since presenter iframes are already pointer-events:none, and text selection is
+  // already prevented globally (see the user-select:none reset at the top of the
+  // stylesheet). Clamped to stay fully within the page so it can never be dragged
+  // out of reach.
+  //
+  // Smoothness: the pointer-to-window grab offset (startX/startY vs origLeft/
+  // origTop) is captured once on pointerdown and never recomputed, so the window
+  // tracks the finger exactly from wherever it was grabbed — no jump-to-finger, no
+  // drift. The box's own size is measured once on pointerdown too (boxW/boxH)
+  // instead of via getBoundingClientRect() on every pointermove — re-measuring a
+  // just-written inline style on every move forces a synchronous layout flush each
+  // time (classic layout-thrashing) and is what actually made mid-window dragging
+  // feel laggy compared to the header. Position writes are additionally batched to
+  // one requestAnimationFrame per paint instead of once per pointermove — touch
+  // hardware can report move events faster than the display repaints, so writing
+  // on every single one is wasted work that only adds jitter.
+  (function(){
+    var box=document.getElementById('hold-preview-box');
+    if(!box)return;
+    function _isHoldPreviewControl(target){
+      return !!(target&&target.closest&&target.closest('button, a, input, textarea, select, [role="button"]'));
+    }
+    var dragging=false,pointerId=null;
+    var startX=0,startY=0,origLeft=0,origTop=0,boxW=0,boxH=0;
+    var pendingLeft=null,pendingTop=null,rafId=null;
+    function applyPending(){
+      rafId=null;
+      if(pendingLeft===null)return;
+      box.style.left=pendingLeft+'px';
+      box.style.top=pendingTop+'px';
+      _holdPreviewPos={left:pendingLeft,top:pendingTop};
+    }
+    function queueMove(clientX,clientY){
+      var maxLeft=Math.max(0,window.innerWidth-boxW), maxTop=Math.max(0,window.innerHeight-boxH);
+      pendingLeft=Math.min(Math.max(0,origLeft+(clientX-startX)),maxLeft);
+      pendingTop=Math.min(Math.max(0,origTop+(clientY-startY)),maxTop);
+      if(rafId===null)rafId=requestAnimationFrame(applyPending);
+    }
+    box.addEventListener('pointerdown',function(e){
+      if(_isHoldPreviewControl(e.target))return;
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      var r=box.getBoundingClientRect();
+      dragging=true;pointerId=e.pointerId;
+      startX=e.clientX;startY=e.clientY;origLeft=r.left;origTop=r.top;boxW=r.width;boxH=r.height;
+      pendingLeft=null;pendingTop=null;
+      box.classList.add('mon-hp-dragging');
+      try{box.setPointerCapture(pointerId);}catch(err){}
+      e.preventDefault();
+    });
+    box.addEventListener('pointermove',function(e){
+      if(!dragging||e.pointerId!==pointerId)return;
+      queueMove(e.clientX,e.clientY);
+      e.preventDefault();
+    });
+    function endDrag(e){
+      if(!dragging||(e&&e.pointerId!==pointerId))return;
+      dragging=false;
+      if(rafId!==null){cancelAnimationFrame(rafId);rafId=null;}
+      applyPending(); // flush the last queued position so the release point is never one frame behind
+      box.classList.remove('mon-hp-dragging');
+      try{box.releasePointerCapture(pointerId);}catch(err){}
+    }
+    box.addEventListener('pointerup',endDrag);
+    box.addEventListener('pointercancel',endDrag);
+  })();
+  setupCardInteractions(document.getElementById('mon-card-live'),'live');
+  setupCardInteractions(document.getElementById('mon-card-preview'),'preview');
 
-  // Click wiring for Blank/Swap/Fade/Cut/Transfer — plain, single-tap clicks;
-  // none of these buttons has a hold/long-press behavior any more.
+  // Click wiring for Blank/Swap/CUT/Transition — plain, single-tap clicks; none of
+  // these buttons has a hold/long-press behavior any more. CUT (#btn-fade) calls
+  // cutPreviewToLive() — the same underlying transfer as Transition (#btn-transfer)
+  // but flagged instant (see cutPreviewToLive()/_instantTransferInFlight above), so
+  // presenter.html skips animateLayer() entirely for that one call. Never wire CUT
+  // to fadePreviewToLive() (the animated path) — that would defeat the whole point.
   (function(){
     var blankBtn=document.getElementById('btn-blank');
     var swapBtn=document.getElementById('btn-swap');
-    var fadeBtn=document.getElementById('btn-fade');
-    var cutBtn=document.getElementById('btn-cut');
-    var transferBtn=document.getElementById('btn-transfer');
+    var cutBtn=document.getElementById('btn-fade');
+    var transitionBtn=document.getElementById('btn-transfer');
     if(blankBtn)blankBtn.addEventListener('click',activateBlank);
     if(swapBtn)swapBtn.addEventListener('click',toggleSwapLivePreview);
-    if(fadeBtn)fadeBtn.addEventListener('click',fadePreviewToLive);
     if(cutBtn)cutBtn.addEventListener('click',cutPreviewToLive);
-    if(transferBtn)transferBtn.addEventListener('click',transferPreviewToLive);
+    if(transitionBtn)transitionBtn.addEventListener('click',transferPreviewToLive);
   })();
 
   // ---- helpers: is this row currently live? (Preview always mirrors Live for
@@ -1568,9 +2136,10 @@
     +'</div>';
   }
 
-  // ---- staging a source onto Preview / pushing it to Live — mirrors the
-  // exact setPreview()/goLive() pipeline Songs and Bible already use, so
-  // Sources is a first-class citizen of Cast Control, not a side system. ----
+  // ---- staging a source onto Preview / pushing it to Live — Sources is the
+  // one remaining consumer of the setPreview()/goLive() staging pipeline
+  // (Songs/Bible now go straight to goLive() — see PRESENT NOW above), so
+  // Preview is effectively Sources-only from here on. ----
   function _sourcePresenterCall(s){
     var bg=getGapBG(), fg=tabAppearance.gap.text, fs=parseInt(document.getElementById('gap-fs').value)||52;
     if(s.type==='idle_clock')return {presenterFn:'showGap',presenterArgs:['clock','',bg,fg,fs],androidFn:'showGap',androidArgs:['clock','',bg,fg,fs]};
@@ -1594,11 +2163,31 @@
     goLive();
   }
 
-  // ---- BLANK quick action (Cast Control, next to Swap) — the Blank Screen
-  // source still exists in sourcesState (hidden:true keeps it off the Sources
-  // list), so this reuses the exact same stage+goLive path every other source
-  // uses rather than duplicating Blank's behavior. ----
-  function activateBlank(){ sendSourceLive('idle-blank'); }
+  // ---- BLANK quick action (Cast Control, next to Swap) — clears ONLY a
+  // currently-live Song/Bible presentation from LIVE; it must never touch
+  // Sources (list, management, or whatever's staged in Preview) and must never
+  // touch Preview at all. presenter.html now renders Sources and Song/Bible as
+  // two independent layers (see its LAYER ARCHITECTURE comment) — Sources is
+  // the permanent base layer, Song/Bible is an overlay drawn on top — so
+  // Blank calls the overlay-only clearOverlay() (presenter.html), NOT
+  // showGap('blank',...) (which would instead replace whatever Source is on
+  // the base layer). clearOverlay() never touches ctrlState.preview or
+  // sourcesState, and never assigns ctrlState.live={kind:'source',...} — it's
+  // a pure "hide the overlay" call, applied straight to Live only, exactly
+  // like goLive() does. If Live isn't currently showing a Song or Bible slide
+  // (e.g. a Source is live, or nothing is), there is nothing for Blank to do.
+  // ----
+  function activateBlank(){
+    if(!ctrlState.live||(ctrlState.live.kind!=='song'&&ctrlState.live.kind!=='bible'))return;
+    presenterCall('clearOverlay',[]);
+    if(window.Android&&typeof window.Android.clearOverlay==='function')window.Android.clearOverlay();
+    var wasKind=ctrlState.live.kind;
+    ctrlState.live=null;
+    updateScreenIndicator('blank');
+    if(wasKind==='song')renderStanzaList();
+    else if(ctrlState.biblePanelTab==='recent')renderCtrlVerses();
+    else refreshVerseLiveTags();
+  }
 
   function renameSource(id){
     var s=findSource(id);if(!s||s.builtin)return;
@@ -2024,59 +2613,38 @@
     var bg=getSongBG();
     var tc=tabAppearance.songs.titleColor;
     var lc=tabAppearance.songs.lyricColor;
-    var fs=parseInt(document.getElementById('song-fs').value);
+    var hc=tabAppearance.songs.hintColor;
+    var fs=AUTO_CONTENT_FONT_SIZE;
     var title=song.number+'. '+song.titleTamil;
     var part=ctrlState.currentStanzas[idx];if(!part)return;
     presentNow({
       kind:'song',songId:song.id,stanzaIdx:idx,label:title+' — '+part.label,
-      androidFn:'showStanza',androidArgs:[title,part.text,bg,tc,lc,fs,part.hint||''],
-      presenterFn:'showContent',presenterArgs:['song',title,part.text,bg,tc,lc,fs,part.hint||''],
+      androidFn:'showStanza',androidArgs:[title,part.text,bg,tc,lc,fs,part.hint||'',hc],
+      presenterFn:'showContent',presenterArgs:['song',title,part.text,bg,tc,lc,fs,part.hint||'',hc],
       indicatorDetail:song.number+'. '+song.titleTamil
     });
     _applyHeadingBodyStyle('songs');
     renderStanzaList();
   }
 
-  // Live-tweak the font size of whatever is currently shown. Since Preview and Live
-  // always mirror each other for normal Song/Bible content now (no separate Go Live
-  // step), this updates both surfaces — and the real cast output — immediately.
-  function updateCurrentPreviewFontSize(val){
-    val=parseInt(val);
-    previewCall('updateFontSize',[val]);
-    presenterCall('updateFontSize',[val]);
-    if(window.Android&&typeof window.Android.updateFontSize==='function')window.Android.updateFontSize(val);
-    var p=ctrlState.preview;
-    if(p){
-      if(p.presenterFn==='showContent'&&p.presenterArgs)p.presenterArgs[6]=val;
-      // song androidArgs: [title,text,bg,titleColor,lyricColor,fs,hint] (idx 5).
-      // bible androidArgs: [ref,text,bg,refColor,textColor,fs] (idx 5, since
-      // showVerse now also carries refColor — see showVerse()).
-      if(p.androidArgs){var idx=5;if(idx<p.androidArgs.length)p.androidArgs[idx]=val;}
-    }
-  }
-  function liveSongFontSize(val){updateCurrentPreviewFontSize(val);}
-  function liveBibleFontSize(val){updateCurrentPreviewFontSize(val);}
-
-  // Pushes the heading/reference & body typography "extras" (font size/width,
-  // reference width) that live outside showContent's fixed positional
-  // signature — see the matching functions added to presenter.html. Safe to
-  // call unconditionally: it only ever writes to presenter.html's own DOM, so
-  // it has no visible effect unless that tab's content happens to be shown.
+  // Pushes the content typography "extras" (letter-spacing/font-weight) that
+  // live outside showContent's fixed positional signature — see the matching
+  // functions in presenter.html. Heading font size/width are no longer
+  // user-configurable (headings auto-fit and are always bold), so only the
+  // body/content fields remain here. Safe to call unconditionally: it only
+  // ever writes to presenter.html's own DOM, so it has no visible effect
+  // unless that tab's content happens to be shown.
   function _applyHeadingBodyStyle(tab){
     var a=tabAppearance[tab];if(!a)return;
-    var titleFs=tab==='songs'?a.titleFontSize:(tab==='bible'?a.refFontSize:null);
-    var titleFw=tab==='songs'?a.titleFontWidth:(tab==='bible'?a.refFontWidth:null);
-    var bodyFw=tab==='songs'?a.lyricFontWidth:null;
-    var titleW=tab==='bible'?a.refWidth:null;
+    var bodyFw=tab==='songs'?a.lyricFontWidth:(tab==='bible'?a.verseFontWidth:null);
+    var bodyWeight=tab==='songs'?a.lyricFontWeight:(tab==='bible'?a.verseFontWeight:null);
     function push(fn,val){
       if(val==null)return;
       previewCall(fn,[val]);presenterCall(fn,[val]);
       if(window.Android&&typeof window.Android[fn]==='function')window.Android[fn](val);
     }
-    push('updateTitleFontSize',titleFs);
-    push('updateTitleFontWidth',titleFw);
     push('updateFontWidth',bodyFw);
-    push('updateTitleWidth',titleW);
+    push('updateFontWeight',bodyWeight);
   }
   function navStanza(dir){var next=ctrlState.currentStanzaIdx+dir;if(next>=0&&next<ctrlState.currentStanzas.length)showStanza(next);}
   function backToSongList(){ctrlState.currentStanzaIdx=-1;document.getElementById('stanzas-view').style.display='none';document.getElementById('songs-view').style.display='flex';}
@@ -2210,7 +2778,7 @@
     var isTamil=TAMIL_VERSIONS.indexOf(ctrlState.bibleVersion)>-1;
     var bookName=isTamil?TAMIL_BOOKS[ctrlState.bibleBook-1]:BIBLE_BOOKS[ctrlState.bibleBook-1].n;
     var ref=bookName+' '+ctrlState.bibleChapter+':'+vn+' ('+ctrlState.bibleVersion+')';
-    var bg=getBibleBG();var fg=tabAppearance.bible.text;var rc=tabAppearance.bible.refColor;var fs=parseInt(document.getElementById('bible-fs').value);
+    var bg=getBibleBG();var fg=tabAppearance.bible.text;var rc=tabAppearance.bible.refColor;var fs=AUTO_CONTENT_FONT_SIZE;
     presentNow({
       kind:'bible',vn:vn,bookN:ctrlState.bibleBook,ch:ctrlState.bibleChapter,ver:ctrlState.bibleVersion,ref:ref,text:v.t,label:ref,
       androidFn:'showVerse',androidArgs:[ref,v.t,bg,rc,fg,fs],
@@ -2298,7 +2866,11 @@
     closeSplitCtrlDropdowns();
     if(!isOpen)dd.style.display='block';
   }
-  function closeSplitCtrlDropdowns(){document.querySelectorAll('#ctrl-split-view .split-dropdown').forEach(function(d){d.style.display='none';});}
+  // Not scoped to #ctrl-split-view any more — the same .split-picker/.split-dropdown
+  // component is now also reused by the Appearance panel's Easing picker (see
+  // _fabFadeSectionHtml()), so closing needs to reach every instance, not just
+  // Split's own, to keep "only one dropdown open at a time" true everywhere.
+  function closeSplitCtrlDropdowns(){document.querySelectorAll('.split-dropdown').forEach(function(d){d.style.display='none';});}
   document.addEventListener('click',function(e){if(!e.target.closest('.split-picker'))closeSplitCtrlDropdowns();});
 
   // Changing a side's version/book/chapter changes that side's verse set, so both
@@ -2342,13 +2914,13 @@
   }
 
   function pushSplitToPresenter(){
-    var bg=getBibleBG();var fg=tabAppearance.bible.text;var fs=parseInt(document.getElementById('bible-fs').value);
+    var bg=getBibleBG();var fg=tabAppearance.bible.text;var rc=tabAppearance.bible.refColor;var fs=AUTO_CONTENT_FONT_SIZE;
     var leftRef=splitState.L.ref||'',leftText=splitState.L.text||'Select a verse';
     var rightRef=splitState.R.ref||'',rightText=splitState.R.text||'Select a verse';
-    var args=[leftRef,leftText,rightRef,rightText,bg,'#9b59b6',fg,fs];
+    var args=[leftRef,leftText,rightRef,rightText,bg,rc,fg,fs];
     presenterCall('showSplit',args);
     previewCall('showSplit',args);
-    if(window.Android&&typeof window.Android.showSplit==='function')window.Android.showSplit(leftRef,leftText,rightRef,rightText,bg,fg,fs);
+    if(window.Android&&typeof window.Android.showSplit==='function')window.Android.showSplit(leftRef,leftText,rightRef,rightText,bg,rc,fg,fs);
     updateScreenIndicator('bible',(splitState.L.ref||'—')+'  |  '+(splitState.R.ref||'—'));
   }
 
@@ -2609,14 +3181,16 @@
     updateBibleSelLabels();
     loadCtrlBible();
     loadPersistentAppearance();
-    syncAppearanceToDOM();
     loadSourcesState();
     drawHue();
     pickerUpdateAll();
     if(window.Android&&typeof window.Android.isPresenterOpen==='function'){
-      updateCastStatus(window.Android.isPresenterOpen());
+      var connected=window.Android.isPresenterOpen();
+      var name=(connected&&typeof window.Android.getConnectedDisplayName==='function')
+        ? window.Android.getConnectedDisplayName() : null;
+      updateCastStatus(connected,name);
     } else {
-      updateCastStatus(false);
+      updateCastStatus(false,null);
     }
   }
 
@@ -2651,7 +3225,9 @@
   }
 
   // ---- FAB popup content — differs per tab (Songs / Bible / Sources); see
-  // section 13 of the spec this implements. ----
+  // section 13 of the spec this implements. Font SIZE is always automatic now
+  // (no slider anywhere in here) — the only text controls left are Content
+  // Font Weight and Content Letter Spacing, plus every existing color setter. ----
   function _fabColorChip(tab,field,label){
     var color=_getFieldColor(tab,field);
     return '<button class="appear-btn" style="flex:1;" onclick="openAppearPopupField(\''+tab+'\',\''+field+'\',\''+escJ(label)+'\')">'+
@@ -2659,15 +3235,39 @@
   }
   function _fabRangeRow(label,id,min,max,val,unit,onchangeExpr){
     unit=unit||'';
-    return '<div class="range-row"><label style="min-width:80px;">'+escH(label)+'</label>'+
-      '<input type="range" id="'+id+'" min="'+min+'" max="'+max+'" value="'+val+'" oninput="'+onchangeExpr+'" style="flex:1;accent-color:var(--accent);">'+
+    return '<div class="range-row"><label>'+escH(label)+'</label>'+
+      '<input type="range" id="'+id+'" min="'+min+'" max="'+max+'" value="'+val+'" oninput="'+onchangeExpr+'">'+
       '<span class="range-val" id="'+id+'-val">'+val+unit+'</span></div>';
   }
-  function _fabFadeSectionHtml(){
+  // Font weight is offered as Normal/Bold rather than a continuous slider —
+  // the bundled NotoSansTamil font only actually ships those two weights (see
+  // the @font-face rules at the top of this file), so anything in between
+  // would just get silently snapped/synthesized by the WebView anyway.
+  function _fabWeightRow(tab,field){
+    var val=tabAppearance[tab][field];
+    var opts=[{v:400,label:'Normal'},{v:700,label:'Bold'}];
+    return '<div class="fab-subrow-label">Font Weight</div><div class="fab-type-row" style="margin-bottom:8px;">'+
+      opts.map(function(o){return '<button class="fab-type-btn'+(val===o.v?' active':'')+'" onclick="onContentFontWeightChange(\''+tab+'\',\''+field+'\','+o.v+')">'+o.label+'</button>';}).join('')+
+    '</div>';
+  }
+  var FADE_EASINGS=[{id:'ease',label:'Ease'},{id:'ease-in',label:'Ease In'},{id:'ease-out',label:'Ease Out'},{id:'ease-in-out',label:'Ease In-Out'},{id:'linear',label:'Linear'}];
+  function _fabFadeSectionHtml(tab){
+    var fs=fadeSettings[tab]||fadeSettings.songs;
     var types=[{id:'fade',label:'Fade'},{id:'slide',label:'Slide'},{id:'zoom',label:'Zoom'}];
+    // Easing picker reuses the exact .split-picker/.split-dropdown component from
+    // Bible → Split Tab → Version (see splitPanelBarHtml()/toggleSplitCtrlDropdown()
+    // above) instead of a native <select>, so it looks and behaves identically.
+    var easingLabel=(FADE_EASINGS.find(function(e){return e.id===fs.easing;})||FADE_EASINGS[0]).label;
+    var easingArr='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>';
+    var easingItems=FADE_EASINGS.map(function(e){return '<div class="split-dropdown-item'+(fs.easing===e.id?' active':'')+'" onclick="onFadeEasingChange(\''+tab+'\',\''+e.id+'\')">'+escH(e.label)+'</div>';}).join('');
+    var easingPickerId='fab-easing-picker-'+tab;
     return '<div class="fab-divider"></div><div class="fab-section"><div class="fab-section-label">Preview → Live Transition</div>'+
-      _fabRangeRow('Fade Duration','fab-fade-duration',100,1000,fadeSettings.duration,'ms',"onFadeDurationChange(this.value)")+
-      '<div class="fab-type-row" style="margin-top:6px;">'+types.map(function(t){return '<button class="fab-type-btn'+(fadeSettings.type===t.id?' active':'')+'" onclick="onFadeTypeChange(\''+t.id+'\')">'+t.label+'</button>';}).join('')+'</div>'+
+      _fabRangeRow('Duration','fab-fade-duration',0,5000,fs.duration,'ms',"onFadeDurationChange('"+tab+"',this.value)")+
+      '<div class="fab-type-row" style="margin-top:6px;">'+types.map(function(t){return '<button class="fab-type-btn'+(fs.type===t.id?' active':'')+'" onclick="onFadeTypeChange(\''+tab+'\',\''+t.id+'\')">'+t.label+'</button>';}).join('')+'</div>'+
+      '<div class="fab-select-row"><label>Easing</label><div class="split-picker" id="'+easingPickerId+'">'+
+        '<div class="split-picker-btn" onclick="toggleSplitCtrlDropdown(\''+easingPickerId+'\')"><span>'+escH(easingLabel)+'</span>'+easingArr+'</div>'+
+        '<div class="split-dropdown" style="display:none;"><div class="split-dropdown-inner">'+easingItems+'</div></div>'+
+      '</div></div>'+
     '</div>';
   }
   function renderFabPopupContent(tab){
@@ -2676,42 +3276,40 @@
     var html='';
     if(tab==='songs'){
       html+='<div class="fab-section"><div class="fab-section-label">Song Heading</div>'+
-        _fabRangeRow('Font Size','fab-song-title-fs',12,72,tabAppearance.songs.titleFontSize,'px',"_fabRangeChange('songs','titleFontSize',this.value,'fab-song-title-fs-val','px')")+
-        _fabRangeRow('Font Width','fab-song-title-fw',-4,20,tabAppearance.songs.titleFontWidth,'px',"_fabRangeChange('songs','titleFontWidth',this.value,'fab-song-title-fw-val','px')")+
         '<div class="appearance-btn-row">'+_fabColorChip('songs','titleColor','Heading Color')+'</div>'+
       '</div>';
       html+='<div class="fab-section"><div class="fab-section-label">Song Lyrics</div>'+
-        _fabRangeRow('Font Size','fab-songs-body-fs',16,96,tabAppearance.songs.lyricFontSize,'px',"onBodyFontSizeChange('songs',this.value)")+
-        _fabRangeRow('Font Width','fab-song-lyric-fw',-4,20,tabAppearance.songs.lyricFontWidth,'px',"_fabRangeChange('songs','lyricFontWidth',this.value,'fab-song-lyric-fw-val','px')")+
-        '<div class="appearance-btn-row">'+_fabColorChip('songs','lyricColor','Lyric Color')+'</div>'+
+        _fabWeightRow('songs','lyricFontWeight')+
+        _fabRangeRow('Letter Spacing','fab-songs-lyric-ls',-4,20,tabAppearance.songs.lyricFontWidth,'px',"_fabRangeChange('songs','lyricFontWidth',this.value,'fab-songs-lyric-ls-val','px')")+
+        '<div class="appearance-btn-row" style="margin-top:6px;">'+_fabColorChip('songs','lyricColor','Lyric Color')+_fabColorChip('songs','hintColor','Hint Color')+'</div>'+
       '</div>';
       html+='<div class="fab-section"><div class="fab-section-label">Song Viewer</div>'+
         '<div class="appearance-btn-row">'+_fabColorChip('songs','bg','Background')+'</div>'+
       '</div>';
     } else if(tab==='bible'){
       html+='<div class="fab-section"><div class="fab-section-label">Bible Reference</div>'+
-        _fabRangeRow('Font Size','fab-bible-ref-fs',12,72,tabAppearance.bible.refFontSize,'px',"_fabRangeChange('bible','refFontSize',this.value,'fab-bible-ref-fs-val','px')")+
-        _fabRangeRow('Font Width','fab-bible-ref-fw',-4,20,tabAppearance.bible.refFontWidth,'px',"_fabRangeChange('bible','refFontWidth',this.value,'fab-bible-ref-fw-val','px')")+
-        _fabRangeRow('Width','fab-bible-ref-w',30,100,tabAppearance.bible.refWidth,'%',"_fabRangeChange('bible','refWidth',this.value,'fab-bible-ref-w-val','%')")+
         '<div class="appearance-btn-row">'+_fabColorChip('bible','refColor','Reference Color')+'</div>'+
       '</div>';
       html+='<div class="fab-section"><div class="fab-section-label">Bible Verse Viewer</div>'+
-        _fabRangeRow('Font Size','fab-bible-body-fs',16,96,tabAppearance.bible.verseFontSize,'px',"onBodyFontSizeChange('bible',this.value)")+
-        '<div class="appearance-btn-row">'+_fabColorChip('bible','text','Verse Text Color')+_fabColorChip('bible','bg','Background')+'</div>'+
+        _fabWeightRow('bible','verseFontWeight')+
+        _fabRangeRow('Letter Spacing','fab-bible-verse-ls',-4,20,tabAppearance.bible.verseFontWidth,'px',"_fabRangeChange('bible','verseFontWidth',this.value,'fab-bible-verse-ls-val','px')")+
+        '<div class="appearance-btn-row" style="margin-top:6px;">'+_fabColorChip('bible','text','Verse Text Color')+_fabColorChip('bible','bg','Background')+'</div>'+
       '</div>';
     } else {
+      // Sources/Idle Screen has no text content, so only Background applies —
+      // no font weight/letter-spacing/hint controls here.
       html+='<div class="fab-section"><div class="fab-section-label">Idle Screen</div>'+
         '<div class="appearance-btn-row">'+_fabColorChip('gap','bg','Background')+'</div>'+
       '</div>';
     }
-    html+=_fabFadeSectionHtml();
+    html+=_fabFadeSectionHtml(tab);
     document.getElementById('fab-popup-content').innerHTML=html;
   }
 
-  // Generic typography-extras setter — heading/reference font size & width,
-  // lyric/verse font width, reference width. Always safe to call: it only
-  // touches presenter.html's own DOM (see _applyHeadingBodyStyle), so it has
-  // no visible effect unless that tab's content happens to be on screen.
+  // Generic typography-extras setter — lyric/verse content letter-spacing.
+  // Always safe to call: it only touches presenter.html's own DOM (see
+  // _applyHeadingBodyStyle), so it has no visible effect unless that tab's
+  // content happens to be on screen.
   function _fabRangeChange(tab,field,val,valElId,unit){
     val=parseInt(val);
     tabAppearance[tab][field]=val;
@@ -2720,31 +3318,33 @@
     _applyHeadingBodyStyle(tab);
   }
 
-  // Body (lyric/verse) font SIZE reuses the existing live-font-size pipeline
-  // (liveSongFontSize/liveBibleFontSize) so it stays a single implementation,
-  // while also persisting the value and keeping the hidden song-fs/bible-fs
-  // inputs (read by showStanza/showVerse) in sync.
-  function onBodyFontSizeChange(tab,val){
+  // Content font weight (Normal/Bold) — same live-push pipeline as letter-
+  // spacing (_applyHeadingBodyStyle), plus a re-render so the active button
+  // reflects the new choice.
+  function onContentFontWeightChange(tab,field,val){
     val=parseInt(val);
-    var fsMap={songs:'song-fs',bible:'bible-fs'};
-    var fsEl=document.getElementById(fsMap[tab]);if(fsEl)fsEl.value=val;
-    var field=tab==='songs'?'lyricFontSize':'verseFontSize';
     tabAppearance[tab][field]=val;
     saveTabAppearance();
-    var valEl=document.getElementById('fab-'+(tab==='songs'?'songs':'bible')+'-body-fs-val');if(valEl)valEl.textContent=val+'px';
-    if(tab==='songs')liveSongFontSize(val);else if(tab==='bible')liveBibleFontSize(val);
+    _applyHeadingBodyStyle(tab);
+    renderFabPopupContent(tab);
   }
 
-  function onFadeDurationChange(val){
+  function onFadeDurationChange(tab,val){
     val=parseInt(val);
-    fadeSettings.duration=val;
+    fadeSettings[tab].duration=val;
     var el=document.getElementById('fab-fade-duration-val');if(el)el.textContent=val+'ms';
     saveFadeSettings();
   }
-  function onFadeTypeChange(type){
-    fadeSettings.type=type;
+  function onFadeTypeChange(tab,type){
+    fadeSettings[tab].type=type;
     saveFadeSettings();
-    renderFabPopupContent(getCurrentTab());
+    renderFabPopupContent(tab);
+  }
+  function onFadeEasingChange(tab,val){
+    fadeSettings[tab].easing=val;
+    saveFadeSettings();
+    closeSplitCtrlDropdowns();
+    renderFabPopupContent(tab);
   }
   // Drag + tap logic (PointerEvent — fires once, no touch/mouse duplication)
   (function(){
@@ -2827,12 +3427,18 @@
       // #monitor-grid's column tracks to match. That was tried and reverted: it
       // required reading the grid's post-reflow width back out via JS, which can
       // race the very resize that triggered this call and produce a stale value.
-      // It's also unnecessary — see the CSS comment on grid-template-columns and on
-      // .mon-ctrl-swap/.mon-ctrl-fadecut's align-items: the card and its control
-      // both hug the SAME shared column line from opposite sides via pure CSS, so
-      // the gap between them stays tight regardless of exactly how the columns
-      // divide up any leftover space.
+      // It's also unnecessary — the card is centered within its grid cell by pure
+      // CSS (see .monitor-card's justify-content), so any leftover slack in the
+      // column just becomes even margin around the card.
       visual.style.width = boxW + 'px';
+      // Clear any explicit pixel width/height the OTHER branch may have left on the
+      // wrap itself — e.g. after Enlarged View is closed and this same wrap (moved
+      // back by _restoreHoldPreviewSource()) is measured here again. Without this,
+      // the wrap keeps rendering at its old floating-window pixel size (inline
+      // style beats the class's width:100%/aspect-ratio:16/9) instead of shrinking
+      // back to fit the card via ordinary CSS cascade off visual's width above.
+      wrap.style.width = '';
+      wrap.style.height = '';
     } else {
       wrap.style.width = boxW + 'px';
       wrap.style.height = boxH + 'px';
@@ -2883,22 +3489,47 @@
 
     // ---- RESPONSIVE SHRINK CLASSES — driven by the stage's actual rendered height
     // (not viewport width), since that's exactly what this drag handle changes.
-    // ~25% shrink -> stage-compact (windows stack, controls share one row).
-    // ~50-60% shrink -> stage-tiny (controls fade out; implies stage-compact too).
+    // ~25% shrink -> stage-compact (badge/footer chrome trims down).
+    // ~50-60% shrink -> stage-tiny (trims further; implies stage-compact too).
     var COMPACT_RATIO=0.70, TINY_RATIO=0.50;
+    // ---- SIDE-BY-SIDE vs STACKED — decided purely from #monitor-grid's own rendered
+    // box (width AND height), not from a viewport media query, so it responds
+    // correctly to the resize handle shrinking the STAGE's height even though the
+    // viewport width itself never changes (shrinking the stage's height shrinks each
+    // 16:9 card's fitted WIDTH too, per the same fit math _syncFrameScale uses — see
+    // updateMonitorStacking()). A ResizeObserver on #monitor-stage (below) re-derives
+    // this on every change, in both directions, so making Preview big again reverts
+    // it to side-by-side just as automatically.
+    var GRID_GAP=6;       // matches #monitor-grid's own CSS gap
+    var MIN_CARD_W=150;   // below this a 16:9 box reads as too small to be useful
+    function updateMonitorStacking(){
+      if(!grid)return;
+      var r=grid.getBoundingClientRect();
+      if(!r.width||!r.height)return;
+      // Whichever arrangement lets each 16:9 box render BIGGER wins: side-by-side
+      // gives each window half the grid's width and its full height; stacked gives
+      // each the full width and half the height. Comparing those two candidate
+      // 16:9-fit widths is a self-adjusting threshold rather than a hardcoded pixel
+      // breakpoint, so it keeps holding at any monitor-grid size the resize handle
+      // (or the device's own screen) produces, instead of one guessed number.
+      var sideBySideFit=Math.min((r.width-GRID_GAP)/2, r.height*16/9);
+      var stackedFit=Math.min(r.width, ((r.height-GRID_GAP)/2)*16/9);
+      grid.classList.toggle('mon-stacked', stackedFit>sideBySideFit || sideBySideFit<MIN_CARD_W);
+    }
     function updateMonitorResponsive(){
       if(!grid)return;
-      if(isCompactLandscape()){grid.classList.remove('stage-compact','stage-tiny');syncPreviewScale();return;}
-      if(!naturalHeight){grid.classList.remove('stage-compact','stage-tiny');syncPreviewScale();return;}
+      if(isCompactLandscape()){grid.classList.remove('stage-compact','stage-tiny');updateMonitorStacking();syncPreviewScale();return;}
+      if(!naturalHeight){grid.classList.remove('stage-compact','stage-tiny');updateMonitorStacking();syncPreviewScale();return;}
       var curH=stage.getBoundingClientRect().height;
       if(!curH)return;
       var ratio=curH/naturalHeight;
       grid.classList.toggle('stage-compact',ratio<=COMPACT_RATIO);
       grid.classList.toggle('stage-tiny',ratio<=TINY_RATIO);
-      // Switching stage-compact/stage-tiny changes #monitor-grid's column tracks
-      // (stacked-with-narrow-gutters vs. side-by-side-equal-columns), so the 16:9
-      // boxes' available width changes too — re-fit them against the new layout
-      // immediately rather than waiting for the next unrelated resize event.
+      // stage-compact/stage-tiny only trim badge/footer chrome now (see the CSS) —
+      // side-by-side vs. stacked is decided independently, purely off the grid's own
+      // rendered size (see updateMonitorStacking()), so both keep working together
+      // rather than one implying the other.
+      updateMonitorStacking();
       syncPreviewScale();
     }
     if(grid&&window.ResizeObserver){

@@ -121,36 +121,69 @@ public class MainActivity extends Activity {
         else dismissPresentation();
     }
 
+    // Re-entrant: if a presentation is already showing on the SAME display this is a
+    // no-op (as before); if it's showing on a DIFFERENT display, switch to the newly
+    // requested one instead of silently ignoring the request — needed now that Cast
+    // Control's device picker lets the user pick a specific display, not just
+    // whichever one connectToDisplay() auto-picked first.
     private void showPresentation(Display display) {
-        if (castPresentation != null && castPresentation.isShowing()) return;
+        if (castPresentation != null && castPresentation.isShowing()) {
+            Display current = castPresentation.getDisplay();
+            if (current != null && current.getDisplayId() == display.getDisplayId()) return;
+        }
         dismissPresentation();
         castPresentation = new CastPresentation(this, display);
         castPresentation.setOnDismissListener(new DialogInterface.OnDismissListener() {
             @Override public void onDismiss(DialogInterface d) {
                 castPresentation = null;
-                notifyCastStatus(false);
+                notifyCastStatus(false, null);
             }
         });
         try {
             castPresentation.show();
-            notifyCastStatus(true);
+            notifyCastStatus(true, display.getName());
         } catch (WindowManager.InvalidDisplayException e) {
             castPresentation = null;
+            notifyCastConnectFailed(display.getName());
         }
     }
 
     private void dismissPresentation() {
         if (castPresentation != null) { castPresentation.dismiss(); castPresentation = null; }
-        notifyCastStatus(false);
+        notifyCastStatus(false, null);
     }
 
-    private void notifyCastStatus(final boolean connected) {
+    // deviceName is the real Display.getName() Android already reports for whatever
+    // is currently connected (Miracast/Cast receiver name, "Built-in HDMI", etc.) —
+    // never a made-up label.
+    private void notifyCastStatus(final boolean connected, final String deviceName) {
         runOnUiThread(new Runnable() { public void run() {
             WebView cw = ControllerActivity.ccwWebView;
             if (cw != null)
                 cw.evaluateJavascript(
-                    "if(typeof updateCastStatus==='function')updateCastStatus(" + connected + ")", null);
+                    "if(typeof updateCastStatus==='function')updateCastStatus(" + connected + "," +
+                        (deviceName != null ? "'" + jsEsc(deviceName) + "'" : "null") + ")", null);
         }});
+    }
+
+    // Reported when a user-initiated connectToDisplayId() attempt fails (the display
+    // disappeared, or the OS refused it) — distinct from notifyCastStatus(false,...)
+    // so the device picker can show a real per-attempt failure instead of just
+    // silently falling back to the ambient "Disconnected" state.
+    private void notifyCastConnectFailed(final String deviceName) {
+        runOnUiThread(new Runnable() { public void run() {
+            WebView cw = ControllerActivity.ccwWebView;
+            if (cw != null)
+                cw.evaluateJavascript(
+                    "if(typeof onCastConnectFailed==='function')onCastConnectFailed(" +
+                        (deviceName != null ? "'" + jsEsc(deviceName) + "'" : "null") + ")", null);
+        }});
+    }
+
+    private static String jsEsc(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("'", "\\'")
+                .replace("\n", "\\n").replace("\r", "\\r");
     }
 
     private final DisplayManager.DisplayListener displayListener = new DisplayManager.DisplayListener() {
@@ -250,12 +283,13 @@ public class MainActivity extends Activity {
         public void showStanza(final String title, final String text,
                                final String bg, final String titleColor,
                                final String lyricColor, final int fontSize,
-                               final String hint) {
+                               final String hint, final String hintColor) {
             runOnUiThread(new Runnable() { public void run() {
                 if (castPresentation != null)
                     castPresentation.runJS("showContent('song','" + esc(title) + "','" +
                         esc(text) + "','" + esc(bg) + "','" + esc(titleColor) + "','" +
-                        esc(lyricColor) + "'," + fontSize + ",'" + esc(hint) + "')");
+                        esc(lyricColor) + "'," + fontSize + ",'" + esc(hint) + "','" +
+                        esc(hintColor) + "')");
             }});
         }
 
@@ -274,12 +308,13 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void showSplit(final String leftRef, final String leftText,
                               final String rightRef, final String rightText,
-                              final String bg, final String textColor, final int fontSize) {
+                              final String bg, final String refColor,
+                              final String textColor, final int fontSize) {
             runOnUiThread(new Runnable() { public void run() {
                 if (castPresentation != null)
                     castPresentation.runJS("showSplit('" + esc(leftRef) + "','" +
                         esc(leftText) + "','" + esc(rightRef) + "','" + esc(rightText) + "','" +
-                        esc(bg) + "','#9b59b6','" + esc(textColor) + "'," + fontSize + ")");
+                        esc(bg) + "','" + esc(refColor) + "','" + esc(textColor) + "'," + fontSize + ")");
             }});
         }
 
@@ -305,6 +340,37 @@ public class MainActivity extends Activity {
         public void clearPresenter() {
             runOnUiThread(new Runnable() { public void run() {
                 if (castPresentation != null) castPresentation.runJS("clearDisplay()");
+            }});
+        }
+
+        // Clears ONLY the Song/Bible overlay on the real cast display (see
+        // presenter.html's LAYER ARCHITECTURE) — the Sources base layer underneath
+        // is left untouched. Called by controller.html's Blank quick-action instead
+        // of showGap('blank',...), which would otherwise replace whatever Source is
+        // currently on the base layer.
+        @JavascriptInterface
+        public void clearOverlay() {
+            runOnUiThread(new Runnable() { public void run() {
+                if (castPresentation != null) castPresentation.runJS("clearOverlay()");
+            }});
+        }
+
+        // Relays the currently-selected Preview -> Live Transition (type/duration/
+        // easing, from controller.html's fadeSettings) to the real cast display so
+        // its presenter.html instance performs the same transition as Preview/Live —
+        // called right before every showStanza/showVerse/showSplit/showGap/showPdf so
+        // the real output is always in sync with whichever category is on screen.
+        // instant is normally false; controller.html's CUT quick-action briefly sets
+        // it true for its one transfer call so presenter.html's animateLayer() skips
+        // animation entirely on the real cast display too — see cutPreviewToLive()/
+        // _instantTransferInFlight in controller.html and _transInstant in
+        // presenter.html. It never changes type/duration/easing themselves.
+        @JavascriptInterface
+        public void setTransition(final String type, final int duration, final String easing, final boolean instant) {
+            runOnUiThread(new Runnable() { public void run() {
+                if (castPresentation != null)
+                    castPresentation.runJS("if(typeof setSlideTransition==='function')setSlideTransition('" +
+                        esc(type) + "'," + duration + ",'" + esc(easing) + "'," + instant + ")");
             }});
         }
 
@@ -360,30 +426,13 @@ public class MainActivity extends Activity {
             }});
         }
 
+        // Content font weight (Song lyrics / Bible verse) — heading stays always bold,
+        // so there is no title/reference equivalent of this.
         @JavascriptInterface
-        public void updateFontSize(final int size) {
+        public void updateFontWeight(final int weight) {
             runOnUiThread(new Runnable() { public void run() {
                 if (castPresentation != null)
-                    castPresentation.runJS("updateFontSize(" + size + ")");
-            }});
-        }
-
-        // Live heading/reference font size (Song heading or Bible reference — both
-        // share presenter.html's #title element).
-        @JavascriptInterface
-        public void updateTitleFontSize(final int size) {
-            runOnUiThread(new Runnable() { public void run() {
-                if (castPresentation != null)
-                    castPresentation.runJS("updateTitleFontSize(" + size + ")");
-            }});
-        }
-
-        // Live heading/reference font width (letter-spacing, px).
-        @JavascriptInterface
-        public void updateTitleFontWidth(final int px) {
-            runOnUiThread(new Runnable() { public void run() {
-                if (castPresentation != null)
-                    castPresentation.runJS("updateTitleFontWidth(" + px + ")");
+                    castPresentation.runJS("updateFontWeight(" + weight + ")");
             }});
         }
 
@@ -393,15 +442,6 @@ public class MainActivity extends Activity {
             runOnUiThread(new Runnable() { public void run() {
                 if (castPresentation != null)
                     castPresentation.runJS("updateFontWidth(" + px + ")");
-            }});
-        }
-
-        // Live heading/reference layout width, as a percentage of the screen.
-        @JavascriptInterface
-        public void updateTitleWidth(final int pct) {
-            runOnUiThread(new Runnable() { public void run() {
-                if (castPresentation != null)
-                    castPresentation.runJS("updateTitleWidth(" + pct + ")");
             }});
         }
 
@@ -419,6 +459,98 @@ public class MainActivity extends Activity {
         public boolean isMirroring() {
             Display[] displays = displayManager.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION);
             return displays.length > 0;
+        }
+
+        // ── Cast Control's device picker ─────────────────────────────────────────
+        // There is no Bluetooth/WiFi/Cast-SDK peer discovery anywhere in this app
+        // (no such dependency is present in build.gradle, and the Sources tab's own
+        // "Wireless" source type already says as much) — the only real, always-
+        // accurate source of "what's out there" is Android's own DisplayManager,
+        // which already knows about every display the OS itself has connected as a
+        // presentation target (Miracast/Cast receiver picked via system Settings,
+        // wired HDMI, etc). These three methods expose exactly that, plus a way to
+        // hand off to the OS's own Cast/Wireless-Display settings screen so the user
+        // can pair a NEW nearby receiver — genuine nearby-device discovery on this
+        // architecture happens at the OS level, not inside this app.
+
+        // Every display currently known to the OS as presentation-capable, with its
+        // real Display.getName() — never a fabricated label.
+        @JavascriptInterface
+        public String getAvailableDisplays() {
+            Display[] displays = displayManager.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION);
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < displays.length; i++) {
+                if (i > 0) sb.append(",");
+                String name = String.valueOf(displays[i].getName());
+                sb.append("{\"id\":").append(displays[i].getDisplayId())
+                  .append(",\"name\":\"").append(jsEsc(name)).append("\"}");
+            }
+            sb.append("]");
+            return sb.toString();
+        }
+
+        // Attempts to show the presentation on one specific already-known display
+        // (rather than connectToDisplay()'s always-pick-the-first behavior). Showing
+        // a Presentation must happen on the UI thread, so the real outcome is
+        // reported asynchronously via updateCastStatus()/onCastConnectFailed() — the
+        // boolean return here only confirms whether a matching display was found and
+        // an attempt was actually dispatched.
+        @JavascriptInterface
+        public boolean connectToDisplayId(final int id) {
+            Display[] displays = displayManager.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION);
+            Display target = null;
+            for (Display d : displays) if (d.getDisplayId() == id) { target = d; break; }
+            if (target == null) return false;
+            final Display t = target;
+            runOnUiThread(new Runnable() { public void run() { showPresentation(t); } });
+            return true;
+        }
+
+        // Explicit user-initiated Disconnect — reuses the exact same
+        // dismissPresentation()/notifyCastStatus(false,null) path already used
+        // whenever the OS itself drops the display (see displayListener.onDisplay
+        // Removed and CastPresentation's onDismissListener above), so Cast Control's
+        // "Disconnected" state and the rest of the app (isCastConnected()/
+        // isMirroring()) all agree immediately. Returns whether anything was
+        // actually connected to disconnect.
+        @JavascriptInterface
+        public boolean disconnectDisplay() {
+            boolean wasConnected = castPresentation != null && castPresentation.isShowing();
+            runOnUiThread(new Runnable() { public void run() { dismissPresentation(); } });
+            return wasConnected;
+        }
+
+        // The real name of whatever is currently connected, or null — used to sync
+        // the main Connected/Disconnected button's label on controller.html load.
+        @JavascriptInterface
+        public String getConnectedDisplayName() {
+            if (castPresentation == null || !castPresentation.isShowing()) return null;
+            Display d = castPresentation.getDisplay();
+            return d != null ? d.getName() : null;
+        }
+
+        // Hands off to the OS's own Cast/Wireless-Display settings so the user can
+        // pair a display this app doesn't already know about — the actual nearby-
+        // device discovery step, since nothing in this app can scan for one itself.
+        // Tries the modern Cast settings screen first, then the older Wi-Fi Display
+        // one; returns false (rather than pretending) if neither resolves on this
+        // device/OS version. Starting an Activity is safe off the UI thread.
+        @JavascriptInterface
+        public boolean openCastSettings() {
+            String[] actions = {
+                "android.settings.CAST_SETTINGS",
+                "android.settings.WIFI_DISPLAY_SETTINGS"
+            };
+            for (String action : actions) {
+                try {
+                    Intent intent = new Intent(action);
+                    if (intent.resolveActivity(getPackageManager()) != null) {
+                        startActivity(intent);
+                        return true;
+                    }
+                } catch (Exception e) { /* try the next action */ }
+            }
+            return false;
         }
 
         @JavascriptInterface
@@ -498,9 +630,7 @@ public class MainActivity extends Activity {
         }
 
         private String esc(String s) {
-            if (s == null) return "";
-            return s.replace("\\", "\\\\").replace("'", "\\'")
-                    .replace("\n", "\\n").replace("\r", "\\r");
+            return jsEsc(s);
         }
     }
 }
