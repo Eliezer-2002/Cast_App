@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+#screen{
+  position:fixed;inset:0;
+  display:flex;flex-direction:column;
+  background:#000;
+  transition:background 0.4s ease;
+  will-change:opacity,transform,background;
+}
+#screen.presenter-enter{animation:presenterFadeIn .24s ease both;}
+@keyframes presenterFadeIn{from{opacity:.22;transform:scale(.992);}to{opacity:1;transform:scale(1);}}
+#title-area{
+  flex-shrink:0;
+  text-align:center;
+  padding:28px 56px 10px;
+  display:none;
+  max-width:100%;
+  margin:0 auto;
+  box-sizing:border-box;
+  transition:max-width .2s ease;
+}
+#title{
+  font-size:24px;color:#9b59b6;
+  font-weight:700;font-family:sans-serif;
+  word-break:break-word;
+  line-height:1.3;
+  letter-spacing:0;
+  transition:color .37s ease,letter-spacing .15s ease;
+}
+#content-area{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:36px 56px;
+  overflow:hidden;
+}
+#content{
+  font-size:30px;color:#ffffff;
+  text-align:center;line-height:1.7;
+  white-space:pre-wrap;font-family:sans-serif;
+  max-width:100%;display:none;
+  word-break:break-word;
+  letter-spacing:0;
+  transition:color .37s ease,letter-spacing .15s ease;
+}
+#clock{
+  font-size:72px;color:#ffffff;
+  font-weight:700;font-family:sans-serif;
+  letter-spacing:2px;
+  transition:color .37s ease;
+}
+#date{
+  font-size:22px;color:#aaaaaa;
+  margin-top:8px;font-family:sans-serif;
+}
+#custom-text{
+  font-size:30px;color:#ffffff;
+  text-align:center;white-space:pre-wrap;
+  font-family:sans-serif;display:none;
+  word-break:break-word;
+  letter-spacing:0;
+  transition:color .37s ease,letter-spacing .15s ease;
+}
+#media{
+  position:fixed;inset:0;width:100%;height:100%;
+  object-fit:fill;display:none;
+}
+#video{
+  position:fixed;inset:0;width:100%;height:100%;
+  object-fit:fill;display:none;
+}
+#camera-video{
+  position:fixed;inset:0;width:100%;height:100%;
+  object-fit:contain;background:#000;display:none;
+}
+#pdf-embed{
+  position:fixed;inset:0;width:100%;height:100%;
+  border:none;background:#fff;display:none;
+}
+@media (prefers-reduced-motion:reduce){
+  #screen.presenter-enter{animation:none;}
+  #screen,#title,#content,#clock,#custom-text{transition:none;}
+}
+#hint{
+  position:fixed;bottom:20px;right:24px;
+  font-size:26px;color:rgba(255,255,255,0.6);
+  font-family:sans-serif;font-style:italic;
+  display:none;max-width:40%;
+}
+#split-screen{
+  position:fixed;inset:0;display:none;flex-direction:row;
+}
+.split-pane{
+  flex:1;min-width:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:32px 34px;overflow:hidden;
+  border-right:1px solid rgba(255,255,255,0.15);
+}
+.split-pane:last-child{border-right:none;}
+.split-ref{
+  font-size:22px;color:#9b59b6;font-weight:700;
+  margin-bottom:16px;text-align:center;font-family:sans-serif;
+  transition:color .37s ease;
+}
+.split-text{
+  font-size:26px;color:#ffffff;text-align:center;line-height:1.6;
+  white-space:pre-wrap;font-family:sans-serif;max-width:100%;
+  word-break:break-word;transition:color .37s ease;
+}
+</style>
+</head>
+<body>
+<div id="screen">
+  <div id="title-area">
+    <div id="title"></div>
+  </div>
+  <div id="content-area">
+    <div id="content"></div>
+    <div id="clock"></div>
+    <div id="date"></div>
+    <div id="custom-text"></div>
+  </div>
+  <img id="media" src="">
+  <video id="video" autoplay loop muted playsinline></video>
+  <video id="camera-video" autoplay muted playsinline></video>
+  <embed id="pdf-embed" type="application/pdf">
+  <div id="hint"></div>
+  <div id="split-screen">
+    <div class="split-pane" id="split-pane-l">
+      <div class="split-ref" id="split-ref-l"></div>
+      <div class="split-text" id="split-text-l"></div>
+    </div>
+    <div class="split-pane" id="split-pane-r">
+      <div class="split-ref" id="split-ref-r"></div>
+      <div class="split-text" id="split-text-r"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+var clockInterval = null;
+var currentMode = 'clock';
+var presenterTransitionTimer = null;
+var _requestedFontSize = 30;
+
+function isPreviewPresenter(){
+  return location.hash.indexOf('preview') !== -1 || location.search.indexOf('preview') !== -1;
+}
+function animatePresenterChange(){
+  var screen=document.getElementById('screen');
+  if(!screen)return;
+  screen.classList.remove('presenter-enter');
+  void screen.offsetWidth;
+  screen.classList.add('presenter-enter');
+  if(presenterTransitionTimer)clearTimeout(presenterTransitionTimer);
+  presenterTransitionTimer=setTimeout(function(){screen.classList.remove('presenter-enter');},280);
+}
+function reportPresenterViewport(){
+  if(isPreviewPresenter())return;
+  if(window.Android&&typeof Android.reportViewport==='function'){
+    Android.reportViewport(window.innerWidth,window.innerHeight);
+  }
+}
+
+// ── Auto-fit: find largest font that fits its container area ──────────
+function autoFit(elId,areaId){
+  var el=document.getElementById(elId);
+  if(!el||el.style.display==='none')return;
+  var area=document.getElementById(areaId||'content-area');
+  if(!area||!area.clientWidth||!area.clientHeight)return;
+  var maxW=area.clientWidth;
+  var maxH=area.clientHeight;
+  // If already fits at requested size, keep it
+  el.style.fontSize=_requestedFontSize+'px';
+  if(el.offsetHeight<=maxH&&el.offsetWidth<=maxW)return;
+  // Binary-search for largest fitting size
+  var lo=8,hi=_requestedFontSize,best=lo;
+  while(lo<=hi){
+    var mid=Math.floor((lo+hi)/2);
+    el.style.fontSize=mid+'px';
+    if(el.offsetHeight<=maxH&&el.offsetWidth<=maxW){best=mid;lo=mid+1;}
+    else{hi=mid-1;}
+  }
+  el.style.fontSize=best+'px';
+}
+
+function showClock(){
+  document.getElementById('clock').style.display='block';
+  document.getElementById('date').style.display='block';
+  tickClock();
+  if(clockInterval)clearInterval(clockInterval);
+  clockInterval=setInterval(tickClock,1000);
+}
+function hideClock(){
+  if(clockInterval){clearInterval(clockInterval);clockInterval=null;}
+  document.getElementById('clock').style.display='none';
+  document.getElementById('date').style.display='none';
+}
+function tickClock(){
+  var now=new Date();
+  var h=now.getHours(),m=now.getMinutes(),s=now.getSeconds();
+  var ampm=h>=12?'PM':'AM';
+  h=h%12||12;
+  document.getElementById('clock').textContent=pad(h)+':'+pad(m)+':'+pad(s)+' '+ampm;
+  document.getElementById('date').textContent=now.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+}
+function pad(n){return n<10?'0'+n:n;}
+
+// Releases the camera <video>'s srcObject (without stopping the underlying
+// MediaStream — that stream is owned by controller.html and may still be in
+// use elsewhere) and hides the PDF embed. Called whenever any other mode
+// (song/verse/gap/split) takes over the screen.
+function _releaseSpecialSurfaces(){
+  var cam=document.getElementById('camera-video');
+  if(cam){cam.pause();cam.srcObject=null;cam.style.display='none';}
+  var pdf=document.getElementById('pdf-embed');
+  if(pdf&&pdf.style.display!=='none'){pdf.style.display='none';pdf.removeAttribute('src');}
+}
+
+// Called by Android bridge — show two Bible verses side-by-side (Split tab)
+function showSplit(leftRef,leftText,rightRef,rightText,bg,titleColor,textColor,fontSize){
+  hideClock();
+  _releaseSpecialSurfaces();
+  _requestedFontSize=fontSize||26;
+  var screen=document.getElementById('screen');
+  if(bg&&bg.startsWith('data:')){screen.style.background='url('+bg+') center/cover no-repeat';}
+  else{screen.style.background=bg||'#000000';}
+  document.getElementById('title-area').style.display='none';
+  document.getElementById('content').style.display='none';
+  document.getElementById('custom-text').style.display='none';
+  document.getElementById('media').style.display='none';
+  document.getElementById('video').style.display='none';
+  document.getElementById('hint').style.display='none';
+  document.getElementById('split-screen').style.display='flex';
+  var refL=document.getElementById('split-ref-l'),refR=document.getElementById('split-ref-r');
+  var txtL=document.getElementById('split-text-l'),txtR=document.getElementById('split-text-r');
+  refL.textContent=leftRef||''; refL.style.color=titleColor||'#9b59b6';
+  refR.textContent=rightRef||''; refR.style.color=titleColor||'#9b59b6';
+  txtL.textContent=leftText||''; txtL.style.color=textColor||'#ffffff'; txtL.style.fontSize=_requestedFontSize+'px';
+  txtR.textContent=rightText||''; txtR.style.color=textColor||'#ffffff'; txtR.style.fontSize=_requestedFontSize+'px';
+  currentMode='split';
+  animatePresenterChange();
+  setTimeout(function(){autoFit('split-text-l','split-pane-l');autoFit('split-text-r','split-pane-r');},0);
+}
+
+// Called by Android bridge — show song/verse content
+function showContent(type,titleText,bodyText,bg,titleColor,textColor,fontSize,hintText){
+  hideClock();
+  _releaseSpecialSurfaces();
+  _requestedFontSize=fontSize||30;
+  var screen=document.getElementById('screen');
+  if(bg&&bg.startsWith('data:')){screen.style.background='url('+bg+') center/cover no-repeat';}
+  else{screen.style.background=bg||'#000000';}
+  document.getElementById('split-screen').style.display='none';
+  // Title area
+  var titleArea=document.getElementById('title-area');
+  var titleEl=document.getElementById('title');
+  if(titleText){
+    titleEl.textContent=titleText;
+    titleEl.style.color=titleColor||'#9b59b6';
+    titleArea.style.display='block';
+  } else {
+    titleArea.style.display='none';
+  }
+  // Content
+  var contentEl=document.getElementById('content');
+  contentEl.textContent=bodyText||'';
+  contentEl.style.color=textColor||'#ffffff';
+  contentEl.style.fontSize=_requestedFontSize+'px';
+  contentEl.style.display='block';
+  document.getElementById('custom-text').style.display='none';
+  document.getElementById('media').style.display='none';
+  document.getElementById('video').style.display='none';
+  // Hint
+  var hintEl=document.getElementById('hint');
+  hintEl.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor" style="width:40px;height:20px;"><rect x="1" y="10" width="22" height="4" rx="2"/></svg>'+(hintText||'');
+  hintEl.style.display=hintText?'block':'none';
+  currentMode=type;
+  animatePresenterChange();
+  // Auto-fit after layout
+  setTimeout(function(){autoFit('content');},0);
+}
+
+// Called by Android bridge — show gap screen
+function showGap(type,text,bg,textColor,fontSize){
+  _releaseSpecialSurfaces();
+  _requestedFontSize=fontSize||30;
+  var screen=document.getElementById('screen');
+  if(bg&&bg.startsWith('data:')){screen.style.background='url('+bg+') center/cover no-repeat';}
+  else{screen.style.background=bg||'#000000';}
+  document.getElementById('title-area').style.display='none';
+  document.getElementById('content').style.display='none';
+  document.getElementById('media').style.display='none';
+  document.getElementById('video').style.display='none';
+  document.getElementById('custom-text').style.display='none';
+  document.getElementById('split-screen').style.display='none';
+  hideClock();
+  currentMode='gap';
+  if(type==='clock'){
+    showClock();
+  } else if(type==='blank'){
+    // all hidden, just background
+  } else if(type==='text'){
+    var ct=document.getElementById('custom-text');
+    ct.textContent=text||'';
+    ct.style.color=textColor||'#ffffff';
+    ct.style.fontSize=_requestedFontSize+'px';
+    ct.style.display='block';
+    setTimeout(function(){autoFit('custom-text');},0);
+  } else if(type==='image'){
+    if(text){document.getElementById('media').src=text;document.getElementById('media').style.display='block';}
+  } else if(type==='video'){
+    if(text){document.getElementById('video').src=text;document.getElementById('video').style.display='block';}
+  }
+  animatePresenterChange();
+}
+
+// Called from controller.html (same-origin iframe call, not the Android string
+// bridge — a MediaStream can't cross that) to show a USB/capture camera
+// source. Local monitors only for now: there is no native path yet to also
+// relay a live MediaStream into the external CastPresentation display.
+function showCamera(stream){
+  hideClock();
+  document.getElementById('title-area').style.display='none';
+  document.getElementById('content').style.display='none';
+  document.getElementById('custom-text').style.display='none';
+  document.getElementById('media').style.display='none';
+  document.getElementById('video').style.display='none';
+  document.getElementById('split-screen').style.display='none';
+  document.getElementById('hint').style.display='none';
+  document.getElementById('pdf-embed').style.display='none';
+  document.getElementById('screen').style.background='#000000';
+  var cam=document.getElementById('camera-video');
+  if(stream){
+    cam.srcObject=stream;
+    cam.style.display='block';
+    cam.play().catch(function(){});
+  } else {
+    cam.style.display='none';
+  }
+  currentMode='camera';
+  animatePresenterChange();
+}
+
+// Called by Android bridge — show a PDF (data: URL) using the WebView's
+// built-in PDF renderer via <embed>. There is no bundled PDF.js/renderer in
+// this build; if the WebView itself can't render PDFs, this will simply show
+// a blank/broken-plugin area rather than pretending to render one.
+function showPdf(dataUrl){
+  hideClock();
+  _releaseSpecialSurfaces();
+  document.getElementById('title-area').style.display='none';
+  document.getElementById('content').style.display='none';
+  document.getElementById('custom-text').style.display='none';
+  document.getElementById('media').style.display='none';
+  document.getElementById('video').style.display='none';
+  document.getElementById('split-screen').style.display='none';
+  document.getElementById('hint').style.display='none';
+  document.getElementById('screen').style.background='#ffffff';
+  var pdf=document.getElementById('pdf-embed');
+  if(dataUrl){pdf.src=dataUrl;pdf.style.display='block';}
+  currentMode='pdf';
+  animatePresenterChange();
+}
+
+// Called by Android bridge — clear display back to clock
+function clearDisplay(){
+  _releaseSpecialSurfaces();
+  document.getElementById('title-area').style.display='none';
+  document.getElementById('content').style.display='none';
+  document.getElementById('custom-text').style.display='none';
+  document.getElementById('media').style.display='none';
+  document.getElementById('video').style.display='none';
+  document.getElementById('split-screen').style.display='none';
+  document.getElementById('screen').style.background='#000000';
+  showClock();
+  currentMode='clock';
+  animatePresenterChange();
+}
+
+// Live font size update — called by Android bridge when slider moves
+function updateFontSize(size){
+  _requestedFontSize=size;
+  var content=document.getElementById('content');
+  var ct=document.getElementById('custom-text');
+  if(content.style.display!=='none'){
+    content.style.fontSize=size+'px';
+    setTimeout(function(){autoFit('content');},0);
+  }
+  if(ct.style.display!=='none'){
+    ct.style.fontSize=size+'px';
+    setTimeout(function(){autoFit('custom-text');},0);
+  }
+  if(currentMode==='split'){
+    document.getElementById('split-text-l').style.fontSize=size+'px';
+    document.getElementById('split-text-r').style.fontSize=size+'px';
+    setTimeout(function(){autoFit('split-text-l','split-pane-l');autoFit('split-text-r','split-pane-r');},0);
+  }
+  document.getElementById('clock').style.fontSize=Math.round(size*2.2)+'px';
+}
+
+// Font weight update
+function updateFontWeight(weight){
+  var w=weight+'';
+  document.getElementById('content').style.fontWeight=w;
+  document.getElementById('custom-text').style.fontWeight=w;
+  document.getElementById('clock').style.fontWeight=w;
+  document.getElementById('split-text-l').style.fontWeight=w;
+  document.getElementById('split-text-r').style.fontWeight=w;
+}
+
+// Live heading/reference font size — #title is shared by the Song heading and
+// the Bible reference (showContent's titleText argument), so one function
+// covers both appearance panels.
+function updateTitleFontSize(size){
+  document.getElementById('title').style.fontSize=size+'px';
+}
+
+// Live heading/reference font width (letter-spacing).
+function updateTitleFontWidth(px){
+  document.getElementById('title').style.letterSpacing=px+'px';
+}
+
+// Live body font width (letter-spacing) — Song lyrics / verse / custom text.
+function updateFontWidth(px){
+  var ls=px+'px';
+  document.getElementById('content').style.letterSpacing=ls;
+  document.getElementById('custom-text').style.letterSpacing=ls;
+}
+
+// Live heading/reference layout width, as a percentage of the screen — lets
+// the Bible reference block be narrowed so long references wrap sooner.
+function updateTitleWidth(pct){
+  document.getElementById('title-area').style.maxWidth=pct+'%';
+}
+
+// Re-fit on resize
+window.addEventListener('resize',function(){
+  autoFit('content');
+  autoFit('custom-text');
+  reportPresenterViewport();
+});
+
+// Start with clock
+showClock();
+reportPresenterViewport();
+window.addEventListener('load',reportPresenterViewport);
+setTimeout(reportPresenterViewport,100);
+</script>
+</body>
+</html>

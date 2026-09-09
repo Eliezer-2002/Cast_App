@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+
+<html class="bg-slate-950 h-full text-slate-100" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Cast Control - Mobile Studio</title>
+<!-- Tailwind CSS v3 CDN with forms & container queries -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              bg: '#090d16',
+              surface: '#0f172a',
+              card: '#131e36',
+              panel: '#182442',
+              border: '#1e293b',
+              accent: '#2563eb',
+              live: '#ef4444',
+              preview: '#8b5cf6'
+            }
+          },
+          fontFamily: {
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+<!-- BEGIN: Custom Styles -->
+<style data-purpose="base-layout">
+    /* Prevent elastic scrolling and handle mobile touch bounds */
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    /* Custom scrollbar for control lists */
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+  </style>
+<style data-purpose="status-indicators">
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    .live-pulse {
+      animation: pulse-dot 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+  </style>
+<!-- END: Custom Styles -->
+</head>
+<body class="flex flex-col justify-between bg-[#070b12] h-full text-slate-200 antialiased select-none">
+<!-- BEGIN: MainHeader -->
+<header class="flex justify-between items-center bg-[#0e1626] shadow-md px-4 pt-3 pb-2.5 border-slate-800/80 border-b shrink-0" data-purpose="app-header">
+<div class="flex items-center gap-2.5">
+<div class="flex justify-center items-center bg-blue-600/20 border border-blue-500/30 rounded-lg w-7 h-7 text-blue-400">
+<!-- Cast Screen Icon -->
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<h1 class="flex items-center gap-1.5 font-bold text-white text-base tracking-tight">
+        Cast Control
+      </h1>
+</div>
+<!-- Right Controls: Status Pill & Action Buttons -->
+<div class="flex items-center gap-2">
+<!-- Status Badge -->
+<div class="flex items-center gap-1.5 bg-red-950/70 px-2.5 py-0.5 border border-red-800/60 rounded-full font-semibold text-[11px] text-red-300 tracking-wider">
+<span class="bg-red-500 rounded-full w-2 h-2 live-pulse"></span>
+<span>DISCONNECTED</span>
+</div>
+<!-- Settings Icon Button -->
+<button class="flex justify-center items-center bg-slate-800/80 active:bg-slate-700 border border-slate-700/60 rounded-lg w-8 h-8 text-slate-300 active:scale-95 transition" data-purpose="header-settings-button" title="Settings">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke-linecap="round" stroke-linejoin="round"></path>
+<path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<!-- Close Icon Button -->
+<button class="flex justify-center items-center bg-slate-800/80 active:bg-slate-700 border border-slate-700/60 rounded-lg w-8 h-8 text-slate-300 active:scale-95 transition" data-purpose="header-close-button" title="Close">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</div>
+</header>
+<!-- END: MainHeader -->
+<!-- BEGIN: MonitorStageSection (Faithful to Sketch Top Half) -->
+<section class="bg-[#0a101d] p-3 shrink-0" data-purpose="video-monitors-stage">
+<!-- Top Row: Replace Panel (Left) & LIVE Monitor (Right) -->
+<div class="flex items-stretch gap-2.5 mb-2.5">
+<!-- Replace Switch Control (Left) -->
+<div class="flex flex-col justify-between items-center bg-[#121b2f] shadow-inner p-2 border border-slate-700/70 rounded-xl w-20" data-purpose="replace-controller">
+<span class="font-bold text-[10px] text-slate-400 uppercase tracking-wider">Replace</span>
+<!-- Directional transition arrows: Swap / Up-Right & Down-Left -->
+<button class="group flex flex-col justify-center items-center bg-blue-950/60 hover:bg-blue-900/60 my-auto border border-blue-500/40 rounded-lg w-12 h-16 text-blue-400 active:scale-95 transition" id="btn-swap-monitors" title="Swap Preview and Live">
+<svg class="w-6 h-6 group-hover:rotate-180 transition-transform duration-300 transform" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" viewbox="0 0 24 24">
+<polyline points="17 4 21 4 21 8"></polyline>
+<path d="M4 11V9a2 2 0 0 1 2-2h15"></path>
+<polyline points="7 20 3 20 3 16"></polyline>
+<path d="M20 13v2a2 2 0 0 1-2 2H3"></path>
+</svg>
+<span class="mt-1 font-medium text-[9px] text-slate-400">SWAP</span>
+</button>
+<span class="font-mono text-[9px] text-slate-500">1080p</span>
+</div>
+<!-- LIVE Screen Monitor (Program Output) -->
+<div class="relative flex flex-col flex-1 justify-between bg-gradient-to-br from-[#1b1429] to-[#0d1322] shadow-lg p-2.5 border-2 border-red-600/80 rounded-xl h-36 overflow-hidden" data-purpose="live-program-monitor">
+<!-- Live Badge & Info Bar -->
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-1.5">
+<span class="bg-red-600 shadow-sm px-2 py-0.5 rounded font-extrabold text-[10px] text-white tracking-widest">
+              LIVE
+            </span>
+<span class="font-mono text-[10px] text-slate-400">PGM OUT</span>
+</div>
+<span class="bg-black/40 px-1.5 py-0.5 border border-red-500/20 rounded font-mono text-[10px] text-red-400">60 FPS</span>
+</div>
+<!-- Clock / Content Display Area -->
+<div class="my-auto text-center">
+<div class="drop-shadow-md font-mono font-bold text-white text-2xl sm:text-3xl tracking-wider" id="live-clock">
+            19:38:22
+          </div>
+<div class="mt-0.5 font-medium text-[10px] text-slate-400">Camera 1 • Main Stage</div>
+</div>
+<!-- Monitor Footer Info -->
+<div class="flex justify-between items-center pt-1 border-red-900/40 border-t text-[9px] text-slate-400">
+<span class="flex items-center gap-1 text-emerald-400">
+<span class="bg-emerald-400 rounded-full w-1.5 h-1.5"></span> ON AIR
+          </span>
+<span class="font-mono text-slate-400">REC: 00:42:15</span>
+</div>
+</div>
+</div>
+<!-- Bottom Row: PREVIEW Screen (Left) & Transition Buttons Fade/Cut (Right) -->
+<div class="flex items-stretch gap-2.5">
+<!-- PREVIEW Monitor Screen -->
+<div class="relative flex flex-col flex-1 justify-between bg-gradient-to-br from-[#1e1b38] to-[#10172a] shadow-lg p-2.5 border-2 border-purple-500/70 rounded-xl h-36 overflow-hidden" data-purpose="preview-monitor">
+<!-- Preview Badge Header -->
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-1.5">
+<span class="bg-purple-600 shadow-sm px-2 py-0.5 rounded font-extrabold text-[10px] text-white tracking-widest">
+              PREVIEW
+            </span>
+<span class="font-mono text-[10px] text-purple-300">PVW STG</span>
+</div>
+<span class="bg-black/40 px-1.5 py-0.5 border border-purple-500/30 rounded font-mono text-[10px] text-purple-300">STANDBY</span>
+</div>
+<!-- Clock / Preview Presentation -->
+<div class="my-auto text-center">
+<div class="drop-shadow-md font-mono font-bold text-purple-100 text-2xl sm:text-3xl tracking-wider" id="preview-clock">
+            19:38:22
+          </div>
+<div class="mt-0.5 font-medium text-[10px] text-purple-300">Deck A • Keynote Presentation</div>
+</div>
+<!-- Preview Monitor Footer -->
+<div class="flex justify-between items-center pt-1 border-purple-900/40 border-t text-[9px] text-slate-400">
+<span class="font-medium text-purple-300">SLIDE 5 / 20</span>
+<span class="font-mono text-slate-400">NEXT: Q&amp;A Video</span>
+</div>
+</div>
+<!-- Transition Action Buttons: FADE & CUT (Right) -->
+<div class="flex flex-col justify-between gap-2 w-20" data-purpose="transition-actions">
+<!-- Fade Button -->
+<button class="flex flex-col flex-1 justify-center items-center bg-gradient-to-b from-[#223150] active:from-blue-600 to-[#162138] active:to-blue-700 shadow-sm border border-blue-400/40 hover:border-blue-400 rounded-xl font-bold text-blue-300 active:text-white text-xs tracking-wider active:scale-95 transition" data-purpose="fade-transition-button" id="btn-fade">
+<svg class="opacity-80 mb-0.5 w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+          FADE
+        </button>
+<!-- Cut Button -->
+<button class="flex flex-col flex-1 justify-center items-center bg-gradient-to-b from-[#2e1d3a] active:from-fuchsia-600 to-[#20142a] active:to-fuchsia-700 shadow-sm border border-fuchsia-500/40 hover:border-fuchsia-400 rounded-xl font-bold text-fuchsia-300 active:text-white text-xs tracking-wider active:scale-95 transition" data-purpose="cut-transition-button" id="btn-cut">
+<svg class="opacity-80 mb-0.5 w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+          CUT
+        </button>
+</div>
+</div>
+</section>
+<!-- END: MonitorStageSection -->
+<!-- BEGIN: DraggableSplitterBar (Size edges dragger from sketch) -->
+<div class="relative flex justify-center items-center bg-[#0b1220] py-1 border-slate-800 border-y cursor-row-resize select-none shrink-0" data-purpose="size-edges-dragger" title="Size edges dragger">
+<div class="absolute inset-0 bg-slate-800/60 my-auto w-full h-1"></div>
+<!-- Central Grip Handle Circle / Pill -->
+<div class="z-10 relative flex items-center gap-1 bg-[#182642] shadow-md px-3 py-0.5 border border-blue-400/50 rounded-full">
+<span class="bg-blue-400 rounded-full w-1.5 h-1.5"></span>
+<div class="flex items-center gap-0.5 px-1">
+<span class="bg-slate-400 rounded-full w-1 h-2.5"></span>
+<span class="bg-slate-400 rounded-full w-1 h-2.5"></span>
+<span class="bg-slate-400 rounded-full w-1 h-2.5"></span>
+</div>
+<span class="bg-blue-400 rounded-full w-1.5 h-1.5"></span>
+</div>
+</div>
+<!-- END: DraggableSplitterBar -->
+<!-- BEGIN: NavigationTabsSection (3 Tabs from sketch: SOURCES, SONGS, BOOK) -->
+<div class="bg-[#0e1628] border-slate-800 border-b shrink-0" data-purpose="navigation-tabs">
+<nav aria-label="Tabs" class="flex h-11 font-bold text-xs uppercase tracking-wider">
+<!-- Tab 1: SOURCES (Selected by default) -->
+<button class="relative flex flex-1 justify-center items-center bg-blue-950/20 border-blue-500 border-b-2 font-extrabold text-blue-400 transition tab-btn" id="tab-sources" onclick="switchTab('sources')">
+<span>SOURCES</span>
+</button>
+<!-- Tab 2: SONGS -->
+<button class="relative flex flex-1 justify-center items-center border-transparent border-b-2 text-slate-400 hover:text-slate-200 transition tab-btn" id="tab-songs" onclick="switchTab('songs')">
+<span>SONGS</span>
+</button>
+<!-- Tab 3: BOOK -->
+<button class="relative flex flex-1 justify-center items-center border-transparent border-b-2 text-slate-400 hover:text-slate-200 transition tab-btn" id="tab-book" onclick="switchTab('book')">
+<span>BOOK</span>
+</button>
+</nav>
+</div>
+<!-- END: NavigationTabsSection -->
+<!-- BEGIN: BottomContentPanel -->
+<main class="relative flex flex-col flex-1 bg-[#090e1a] overflow-hidden" data-purpose="bottom-panel-viewport">
+<!-- Container 1: SOURCES TAB CONTENT -->
+<div class="flex-1 space-y-2.5 p-3 pb-20 overflow-y-auto tab-pane" id="content-sources">
+<!-- Source 1: Camera 1 -->
+<div class="flex justify-between items-center gap-3 bg-[#111a30] active:bg-[#15213d] shadow p-2.5 border border-blue-900/50 hover:border-blue-500/50 rounded-xl transition" data-purpose="source-item">
+<div class="flex items-center gap-3">
+<!-- Thumbnail / Icon -->
+<div class="relative flex justify-center items-center bg-slate-900 border border-slate-700 rounded-lg w-12 h-10 overflow-hidden text-slate-400 shrink-0">
+<svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="right-0 bottom-0 absolute bg-blue-600 px-1 font-bold text-[8px] text-white">CAM</span>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<span class="font-semibold text-white text-sm">Source 1</span>
+<span class="bg-emerald-950 px-1.5 py-0.2 border border-emerald-800/60 rounded font-bold text-[10px] text-emerald-400">LIVE</span>
+</div>
+<p class="text-slate-400 text-xs">Main Presenter • Sony FX3</p>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<!-- Audio monitoring icon -->
+<button class="flex justify-center items-center bg-slate-800 border border-slate-700 rounded-lg w-8 h-8 text-slate-300 active:scale-95" title="Headphones Audio">
+<svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<path d="M3 18v-6a9 9 0 0118 0v6M3 18a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3v5zm18 0a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3v5z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<!-- Quick Load / Output button -->
+<button class="bg-blue-600/30 active:bg-blue-600 px-2.5 py-1 border border-blue-500/50 rounded-lg font-bold text-blue-300 active:text-white text-xs transition">
+            PREV
+          </button>
+</div>
+</div>
+<!-- Source 2: Screen Share Presentation -->
+<div class="flex justify-between items-center gap-3 bg-[#111a30] active:bg-[#15213d] shadow p-2.5 border border-slate-800 hover:border-blue-500/50 rounded-xl transition" data-purpose="source-item">
+<div class="flex items-center gap-3">
+<div class="relative flex justify-center items-center bg-slate-900 border border-slate-700 rounded-lg w-12 h-10 overflow-hidden text-slate-400 shrink-0">
+<svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="right-0 bottom-0 absolute bg-purple-600 px-1 font-bold text-[8px] text-white">PPT</span>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<span class="font-semibold text-white text-sm">Source 2</span>
+<span class="bg-purple-950 px-1.5 py-0.2 border border-purple-800/60 rounded font-bold text-[10px] text-purple-300">PREVIEW</span>
+</div>
+<p class="text-slate-400 text-xs">PPT Presentation Deck (HDMI 2)</p>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="flex justify-center items-center bg-slate-800 border border-slate-700 rounded-lg w-8 h-8 text-slate-400 active:scale-95" title="Headphones Audio">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<path d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" stroke-linecap="round" stroke-linejoin="round"></path>
+<path d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<button class="bg-purple-600 active:bg-purple-700 shadow-sm px-2.5 py-1 rounded-lg font-bold text-white text-xs transition">
+            READY
+          </button>
+</div>
+</div>
+<!-- Source 3: Media Player / Video Clip -->
+<div class="flex justify-between items-center gap-3 bg-[#111a30] active:bg-[#15213d] shadow p-2.5 border border-slate-800 hover:border-blue-500/50 rounded-xl transition" data-purpose="source-item">
+<div class="flex items-center gap-3">
+<div class="relative flex justify-center items-center bg-slate-900 border border-slate-700 rounded-lg w-12 h-10 overflow-hidden text-slate-400 shrink-0">
+<svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+<path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="right-0 bottom-0 absolute bg-amber-600 px-1 font-bold text-[8px] text-white">VID</span>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<span class="font-semibold text-white text-sm">Source 3</span>
+<span class="bg-slate-800 px-1.5 py-0.2 border border-slate-700 rounded font-medium text-[10px] text-slate-400">STANDBY</span>
+</div>
+<p class="text-slate-400 text-xs">Intro Clip &amp; Promo reel.mp4</p>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="flex justify-center items-center bg-slate-800 border border-slate-700 rounded-lg w-8 h-8 text-slate-300 active:scale-95" title="Headphones Audio">
+<svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<path d="M3 18v-6a9 9 0 0118 0v6M3 18a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3v5zm18 0a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3v5z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<button class="bg-slate-800 px-2.5 py-1 border border-slate-700 hover:border-slate-500 rounded-lg font-semibold text-slate-300 text-xs active:scale-95 transition">
+            SELECT
+          </button>
+</div>
+</div>
+<!-- Source 4: Remote Guest Feed -->
+<div class="flex justify-between items-center gap-3 bg-[#111a30] opacity-80 shadow p-2.5 border border-slate-800/80 rounded-xl transition" data-purpose="source-item">
+<div class="flex items-center gap-3">
+<div class="flex justify-center items-center bg-slate-900 border border-slate-700 rounded-lg w-12 h-10 text-slate-400 shrink-0">
+<svg class="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<span class="font-semibold text-slate-200 text-sm">Source 4</span>
+<span class="bg-slate-800 px-1.5 py-0.2 rounded text-[10px] text-slate-400">NDI IN</span>
+</div>
+<p class="text-slate-400 text-xs">Remote Guest • Zoom Link</p>
+</div>
+</div>
+<button class="bg-slate-800 px-2.5 py-1 border border-slate-700 rounded-lg font-semibold text-slate-300 text-xs">
+          SELECT
+        </button>
+</div>
+</div>
+<!-- Container 2: SONGS TAB CONTENT (Hidden by default) -->
+<div class="hidden flex-1 space-y-2.5 p-3 pb-20 overflow-y-auto tab-pane" id="content-songs">
+<div class="flex justify-between items-center bg-[#111a30] p-3 border border-slate-800 rounded-xl">
+<div>
+<h4 class="font-bold text-white text-sm">01. Amazing Grace (D)</h4>
+<p class="text-slate-400 text-xs">Tempo: 72 bpm • 4/4 • 6 Verses</p>
+</div>
+<button class="bg-purple-600 px-3 py-1 rounded-lg font-bold text-white text-xs">QUEUE</button>
+</div>
+<div class="flex justify-between items-center bg-[#111a30] p-3 border border-slate-800 rounded-xl">
+<div>
+<h4 class="font-bold text-white text-sm">02. 10,000 Reasons (G)</h4>
+<p class="text-slate-400 text-xs">Tempo: 74 bpm • Chorus Intro</p>
+</div>
+<button class="bg-slate-800 px-3 py-1 border border-slate-700 rounded-lg font-bold text-slate-300 text-xs">QUEUE</button>
+</div>
+<div class="flex justify-between items-center bg-[#111a30] p-3 border border-slate-800 rounded-xl">
+<div>
+<h4 class="font-bold text-white text-sm">03. Way Maker (E)</h4>
+<p class="text-slate-400 text-xs">Bridge Reprise • Video Loop</p>
+</div>
+<button class="bg-slate-800 px-3 py-1 border border-slate-700 rounded-lg font-bold text-slate-300 text-xs">QUEUE</button>
+</div>
+</div>
+<!-- Container 3: BOOK TAB CONTENT (Hidden by default) -->
+<div class="hidden flex-1 space-y-2.5 p-3 pb-20 overflow-y-auto tab-pane" id="content-book">
+<div class="flex justify-between items-center bg-[#111a30] p-3 border border-slate-800 rounded-xl">
+<div>
+<h4 class="font-bold text-white text-sm">Scripture Reading: John 14:1-6</h4>
+<p class="text-slate-400 text-xs">Preset: Bible Lower Thirds Overlay</p>
+</div>
+<button class="bg-blue-600 px-3 py-1 rounded-lg font-bold text-white text-xs">PROJECT</button>
+</div>
+<div class="flex justify-between items-center bg-[#111a30] p-3 border border-slate-800 rounded-xl">
+<div>
+<h4 class="font-bold text-white text-sm">Order of Service (PDF)</h4>
+<p class="text-slate-400 text-xs">Page 1 to 4 • Auto-advance</p>
+</div>
+<button class="bg-slate-800 px-3 py-1 border border-slate-700 rounded-lg font-bold text-slate-300 text-xs">PROJECT</button>
+</div>
+</div>
+<!-- Prominent "+ Add" button (Positioned at bottom right of the panel, strictly faithful to sketch) -->
+<div class="right-3 bottom-3 z-20 absolute" data-purpose="add-button-anchor">
+<button class="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 hover:from-blue-500 to-indigo-600 hover:to-indigo-500 shadow-blue-900/40 shadow-lg px-4 border border-blue-400/40 rounded-xl h-11 font-bold text-white text-xs active:scale-95 transition" id="btn-add" title="Add new item">
+<svg class="stroke-[3] w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 4v16m8-8H4" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span class="tracking-wide">+ Add</span>
+</button>
+</div>
+</main>
+<!-- END: BottomContentPanel -->
+<!-- BEGIN: BottomActionToolbar (Broadcaster Stream Footer) -->
+<footer class="flex justify-between items-center gap-3 bg-[#0b111e] p-2.5 border-slate-800/90 border-t shrink-0" data-purpose="output-broadcast-footer">
+<button class="flex flex-1 justify-center items-center gap-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 shadow-md py-2.5 rounded-xl font-bold text-white text-xs uppercase tracking-wider active:scale-[0.99] transition">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+      SEND TO OUTPUT
+    </button>
+</footer>
+<!-- END: BottomActionToolbar -->
+<!-- BEGIN: Logic & Interactivity Scripts -->
+<script data-purpose="tabs-and-clock-logic">
+    // Live clock simulator for studio monitors
+    function updateStudioClock() {
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      const timeStr = `${hours}:${minutes}:${seconds}`;
+
+      const liveClock = document.getElementById('live-clock');
+      const prevClock = document.getElementById('preview-clock');
+      if (liveClock) liveClock.textContent = timeStr;
+      if (prevClock) prevClock.textContent = timeStr;
+    }
+    setInterval(updateStudioClock, 1000);
+    updateStudioClock();
+
+    // 3 Tabs switching logic (SOURCES, SONGS, BOOK)
+    function switchTab(tabKey) {
+      const tabs = ['sources', 'songs', 'book'];
+      
+      tabs.forEach(t => {
+        const btn = document.getElementById(`tab-${t}`);
+        const content = document.getElementById(`content-${t}`);
+        
+        if (t === tabKey) {
+          // Activate tab
+          btn.classList.add('text-blue-400', 'border-blue-500', 'bg-blue-950/20', 'font-extrabold');
+          btn.classList.remove('text-slate-400', 'border-transparent');
+          if (content) content.classList.remove('hidden');
+        } else {
+          // Deactivate tab
+          btn.classList.remove('text-blue-400', 'border-blue-500', 'bg-blue-950/20', 'font-extrabold');
+          btn.classList.add('text-slate-400', 'border-transparent');
+          if (content) content.classList.add('hidden');
+        }
+      });
+    }
+
+    // Interactive button feedback
+    document.getElementById('btn-swap-monitors')?.addEventListener('click', () => {
+      const live = document.getElementById('live-clock');
+      const pvw = document.getElementById('preview-clock');
+      if (!live || !pvw) return;
+      live.classList.add('scale-105', 'text-amber-300');
+      pvw.classList.add('scale-105', 'text-amber-300');
+      setTimeout(() => {
+        live.classList.remove('scale-105', 'text-amber-300');
+        pvw.classList.remove('scale-105', 'text-amber-300');
+      }, 250);
+    });
+
+    document.getElementById('btn-cut')?.addEventListener('click', function() {
+      this.classList.add('bg-fuchsia-600', 'text-white');
+      setTimeout(() => this.classList.remove('bg-fuchsia-600', 'text-white'), 180);
+    });
+
+    document.getElementById('btn-fade')?.addEventListener('click', function() {
+      this.classList.add('bg-blue-600', 'text-white');
+      setTimeout(() => this.classList.remove('bg-blue-600', 'text-white'), 300);
+    });
+  </script>
+<!-- END: Logic & Interactivity Scripts -->
+</body></html>

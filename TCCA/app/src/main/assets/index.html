@@ -1,0 +1,2110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>The Book</title>
+    <style>
+        @font-face { font-family:'NotoSansTamil'; src:url('fonts/NotoSansTamil-Regular.woff2') format('woff2'); font-weight:400; }
+        @font-face { font-family:'NotoSansTamil'; src:url('fonts/NotoSansTamil-Bold.woff2') format('woff2'); font-weight:700; }
+
+        :root {
+          --bg:#1a0a2e; --bg2:#2d1b4e; --bg3:#3d2860;
+          --text:#e8e0f0; --text2:#b8a8d0;
+          --accent:#9b59b6; --accent2:#7d3c98; --accent3:#c39bd3;
+          --nav-bg:#12071f; --card:#2a1a42; --border:#4a3060;
+          --danger:#e74c3c; --success:#27ae60; --warn:#f39c12;
+          --font-size:16px;
+        }
+        .theme-light{--bg:#f5f5f5;--bg2:#fff;--bg3:#e8e8e8;--text:#1a1a2e;--text2:#555577;--accent:#7b2fbe;--accent2:#6a1fa8;--accent3:#9b59b6;--nav-bg:#fff;--card:#fff;--border:#d0c0e0;}
+        .theme-ocean{--bg:#0a1628;--bg2:#102040;--bg3:#1a3050;--text:#d0e8ff;--text2:#8ab4d4;--accent:#2196f3;--accent2:#1565c0;--accent3:#64b5f6;--nav-bg:#070f1c;--card:#0f1e35;--border:#1e4070;}
+        .theme-forest{--bg:#0d1f0d;--bg2:#1a3320;--bg3:#264030;--text:#d4e8d4;--text2:#8ab48a;--accent:#4caf50;--accent2:#2e7d32;--accent3:#81c784;--nav-bg:#081408;--card:#172a1c;--border:#2e5a30;}
+        .theme-sunset{--bg:#1f0a00;--bg2:#3a1500;--bg3:#4d2000;--text:#ffe8d0;--text2:#d4a880;--accent:#ff6b35;--accent2:#cc4400;--accent3:#ffa07a;--nav-bg:#140700;--card:#2e1000;--border:#5a2800;}
+        .theme-gold{--bg:#1a1400;--bg2:#2e2400;--bg3:#403400;--text:#fff5cc;--text2:#d4bc70;--accent:#ffd700;--accent2:#b8860b;--accent3:#ffe066;--nav-bg:#110e00;--card:#251d00;--border:#4a3c00;}
+
+        *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+        /* FIX: disable long-press context menu everywhere except inputs/textareas */
+        body *:not(input):not(textarea):not([contenteditable]){-webkit-user-select:none;user-select:none;}
+        input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text;}
+        html,body{height:100%;overflow:hidden;font-family:'NotoSansTamil',sans-serif;background:var(--bg);color:var(--text);}
+        #app{display:flex;flex-direction:column;height:100vh;}
+        .page{display:none;flex:1;overflow:hidden;flex-direction:column;transition:opacity 0.18s;}
+        .page.active{display:flex;}
+
+        /* NAV */
+        #bottom-nav{display:flex;background:var(--nav-bg);border-top:1px solid var(--border);flex-shrink:0;}
+        .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 2px;border:none;background:none;color:var(--text2);font-size:9px;cursor:pointer;transition:color 0.2s;gap:3px;font-family:'NotoSansTamil',sans-serif;}
+        .nav-btn.active{color:var(--accent);}
+        .nav-btn svg{width:20px;height:20px;}
+
+        /* HEADER */
+        .page-header{display:flex;align-items:center;padding:10px 14px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;gap:8px;}
+        .page-header h1{font-size:17px;font-weight:700;color:var(--text);flex:1;}
+
+        /* INPUTS */
+        .search-box{flex:1;display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:0 10px;gap:6px;}
+        .search-box svg{width:16px;height:16px;color:var(--text2);flex-shrink:0;}
+        .search-box input{flex:1;background:none;border:none;padding:9px 0;color:var(--text);font-size:14px;font-family:'NotoSansTamil',sans-serif;outline:none;}
+        .search-box input::placeholder,.num-search-box input::placeholder{color:var(--text2);opacity:1;}
+        .form-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;font-family:'NotoSansTamil',sans-serif;outline:none;}
+        .form-input:focus{border-color:var(--accent);}
+        textarea.form-input{min-height:120px;resize:vertical;}
+        select.form-input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23888' d='M6 8L0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;}
+
+        /* BUTTONS */
+        .btn{padding:10px 16px;border-radius:8px;border:none;cursor:pointer;font-size:14px;font-family:'NotoSansTamil',sans-serif;font-weight:600;transition:opacity 0.15s;display:inline-flex;align-items:center;gap:6px;}
+        .btn:active{opacity:0.7;}
+        .btn-primary{background:var(--accent);color:#fff;}
+        .btn-secondary{background:var(--bg3);color:var(--text);border:1px solid var(--border);}
+        .btn-danger{background:var(--danger);color:#fff;}
+        .btn-success{background:var(--success);color:#fff;}
+        .btn-sm{padding:6px 12px;font-size:12px;}
+        .icon-btn{padding:8px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2);margin-left: auto;}
+        .icon-btn:active{opacity:0.7;}
+        .icon-btn svg{width:18px;height:18px;}
+
+        /* TABS */
+        .tabs{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;}
+        .tab{flex:1;padding:10px 4px;text-align:center;cursor:pointer;font-size:12px;color:var(--text2);border-bottom:2px solid transparent;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:4px;}
+        .tab svg{width:14px;height:14px;}
+        .tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+
+        /* SCROLL */
+        .scroll-area{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+
+        /* SONG CARD */
+        .song-card{display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;background:var(--bg);transition:background 0.15s;}
+        .song-card:active{background:var(--bg3);}
+        .song-num{font-size:13px;color:var(--accent);font-weight:700;min-width:38px;}
+        .song-info{flex:1;min-width:0;}
+        .song-title-ta{font-size:15px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .fav-btn{padding:8px;background:none;border:none;cursor:pointer;flex-shrink:0;}
+        .fav-btn svg{width:20px;height:20px;color:var(--text2);}
+        .fav-btn.active svg{color:#ffd700;fill:#ffd700;}
+
+        /* SONG DETAIL PAGE - full page */
+        #page-song-detail{background:var(--bg);}
+        /* BIBLE */
+        .verse-row{display:flex;padding:10px 14px;border-bottom:1px solid var(--border);gap:8px;cursor:pointer;transition:background 0.15s;}
+        .verse-row:active{background:var(--bg3);}
+        .verse-row.highlight{background:rgba(155,89,182,0.15);border-left:3px solid var(--accent);}
+        .verse-num{font-size:12px;color:var(--accent);font-weight:700;min-width:26px;padding-top:3px;}
+        .verse-text{font-size:var(--font-size);color:var(--text);line-height:1.7;flex:1;}
+
+        /* FORM */
+        .form-group{padding:12px 14px;border-bottom:1px solid var(--border);}
+        .form-label{font-size:11px;color:var(--text2);margin-bottom:5px;display:flex;align-items:center;gap:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;}
+        .form-label svg{width:12px;height:12px;}
+
+        /* MODAL */
+        .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:100;display:none;align-items:center;justify-content:center;padding:16px;}
+        .modal-overlay.open{display:flex;}
+        .modal{background:var(--bg2);border-radius:16px;border:1px solid var(--border);width:100%;max-width:480px;max-height:88vh;overflow-y:auto;}
+        .modal-header{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);gap:8px;}
+        .modal-header .modal-icon{width:32px;height:32px;background:var(--bg3);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+        .modal-header .modal-icon svg{width:18px;height:18px;color:var(--accent);}
+        .modal-header h2{flex:1;font-size:16px;}
+        .modal-body{padding:14px;}
+        .modal-footer{display:flex;gap:8px;padding:14px;border-top:1px solid var(--border);}
+        .modal-footer .btn{flex:1;justify-content:center;}
+
+        /* CAST INDICATOR */
+        /* #cast-indicator{position:fixed;top:12px;right:12px;z-index:60;display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.7);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:6px 12px;cursor:pointer;}
+        #cast-dot{width:10px;height:10px;border-radius:50%;background:#e74c3c;box-shadow:0 0 6px #e74c3c;}
+        #cast-dot.active{background:#27ae60;box-shadow:0 0 8px #27ae60;animation:pulse 2s infinite;}
+        #cast-label{font-size:11px;color:#fff;font-weight:600;}
+        @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.6;}} */
+
+        /* SPLIT BIBLE */
+        .split-panel-bar{display:flex;flex-direction:column;gap:4px;padding:6px 8px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;}
+        .split-panel-row{display:flex;gap:4px;}
+        .split-picker{position:relative;flex:1;min-width:0;}
+        .split-picker-btn{width:100%;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:7px 10px;color:var(--text);font-size:12px;font-family:'NotoSansTamil',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:4px;box-sizing:border-box;transition:border-color 0.2s;}
+        .split-picker-btn:active{border-color:var(--accent);}
+        .split-picker-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+        .split-dropdown{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;width:max-content;max-width:min(80vw,320px);z-index:100;background:var(--bg2);border:1px solid var(--border);border-radius:10px;max-height:50vh;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,0.5);}
+        .split-dropdown-inner{max-height:50vh;overflow-y:auto;overflow-x:hidden;}
+        .split-dropdown-item{padding:9px 12px;font-size:12px;color:var(--text);cursor:pointer;font-family:'NotoSansTamil',sans-serif;border-bottom:1px solid var(--border);word-break:break-word;overflow-wrap:anywhere;}
+        .split-dropdown-item:last-child{border-bottom:none;}
+        .split-dropdown-item.active{background:var(--accent);color:#fff;font-weight:700;}
+        .split-dropdown-item:active{background:var(--bg3);}
+        .split-view{display:flex;flex-direction:column;flex:1;overflow:hidden;}
+        .split-cols{display:flex;flex:1;overflow:hidden;}
+        .split-col{flex:1;overflow:hidden;display:flex;flex-direction:column;min-width:0;}
+        .split-col-scroll{flex:1;overflow-y:auto;overflow-x:hidden;word-break:break-word;}.split-col-header{font-size:10px;color:var(--accent);font-weight:700;padding:6px 8px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:1px;position:sticky;top:0;background:var(--bg2);z-index:1;}
+        .split-col .verse-row{padding:5px 6px;gap:4px;}
+        .split-col .verse-num{min-width:16px;font-size:10px;}
+        .split-col .verse-text{font-size:calc(var(--font-size) * 0.8125);}
+
+        /* SETTINGS */
+        .settings-section-header{padding:12px 14px 4px;font-size:10px;color:var(--text2);font-weight:700;letter-spacing:1.5px;text-transform:uppercase;}
+        .settings-row{display:flex;align-items:center;padding:14px;border-bottom:1px solid var(--border);gap:12px;cursor:pointer;}
+        .settings-row-icon{width:36px;height:36px;background:var(--bg3);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+        .settings-row-icon svg{width:18px;height:18px;color:var(--accent);}
+        .settings-row-label{flex:1;font-size:14px;color:var(--text);}
+        .settings-row-value{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:4px;}
+        .settings-row-value svg{width:14px;height:14px;}
+        .theme-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 14px;}
+        .theme-btn{padding:10px 6px;border-radius:10px;border:2px solid var(--border);cursor:pointer;text-align:center;font-size:12px;font-family:'NotoSansTamil',sans-serif;background:var(--bg2);color:var(--text);transition:border-color 0.2s;}
+        .theme-btn.active{border-color:var(--accent);color:var(--accent);font-weight:700;}
+
+        /* SONG BOOKS — grid + header + group results */
+        .book-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding:14px;}
+        .book-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 12px;cursor:pointer;display:flex;flex-direction:column;gap:8px;transition:border-color 0.15s;min-height:96px;min-width:0;max-width:100%;}
+        .book-card:active{border-color:var(--accent);}
+        .book-card-icon{width:34px;height:34px;border-radius:9px;background:var(--bg3);display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0;}
+        .book-card-icon svg{width:18px;height:18px;}
+        .book-card-name{font-size:14px;font-weight:700;color:var(--text);line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word;overflow-wrap:anywhere;}
+        .book-card-meta{font-size:11px;color:var(--text2);display:flex;align-items:center;gap:5px;margin-top: auto;}
+        .book-card-badge{font-size:9px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;padding:2px 7px;border-radius:8px;background:var(--bg3);color:var(--text2);}
+        .book-card-badge.user{background:var(--accent2);color:#fff;}
+        .create-book-wrap{padding:8px 14px;margin:10px 0 0 0;}
+        .create-book-btn{width:100%;justify-content:center;padding:13px;border-radius:12px;border:2px dashed var(--border);background:none;color:var(--accent);}
+        .book-header{display:flex;align-items:center;gap:8px;padding:12px 14px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;}
+        .book-header h1{font-size:17px;font-weight:700;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .book-header .book-header-actions{display:flex;gap:6px;flex-shrink:0;}
+        .book-group-header{padding:10px 14px 6px;font-size:12px;font-weight:700;color:var(--accent);letter-spacing:0.3px;display:flex;align-items:center;gap:6px;background:var(--bg2);position:sticky;top:0;}
+        .book-group-header svg{width:13px;height:13px;}
+
+        /* TOAST */
+        #toast{position:fixed;bottom:76px;left:50%;transform:translateX(-50%);background:var(--bg);color:var(--accent);padding:10px 20px;border-radius:20px;font-size:13px;z-index:500;display:none;white-space:nowrap;border:1px solid var(--border);}
+
+        /* EMPTY STATE */
+        .empty-state{padding:60px 20px;text-align:center;color:var(--text2);}
+        .empty-state svg{width:56px;height:56px;margin-bottom:12px;opacity:0.4;}
+        .empty-state p{font-size:14px;}
+
+
+
+        /* HINTS */
+        .hints-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px;padding:4px;}
+        .hint-row{display:flex;gap:6px;padding:4px 8px;border-radius:6px;}
+        .hint-code{color:var(--accent);font-weight:700;min-width:38px;font-size:12px;}
+        .hint-name{color:var(--text);font-size:12px;}
+
+        /* RANGE ROW */
+        .range-row{display:flex;align-items:center;gap:10px;padding:8px 14px;}
+        .range-row label{font-size:12px;color:var(--text2);min-width:80px;}
+        .range-row input[type=range]{flex:1;accent-color:var(--accent);}
+        .range-val{font-size:12px;color:var(--text2);min-width:28px;text-align:right;}
+
+        /* COLOR ROW */
+        .color-row{display:flex;align-items:center;gap:10px;padding:8px 14px;}
+        .color-row label{font-size:12px;color:var(--text2);min-width:90px;}
+        .color-swatch{width:34px;height:34px;border-radius:8px;border:2px solid var(--border);cursor:pointer;padding:0;flex-shrink:0;}
+
+        /* BIBLE MANAGER */
+        .bible-ver-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);}
+        .bible-ver-info{flex:1;min-width:0;}
+        .bible-ver-name{font-size:14px;color:var(--text);font-weight:600;}
+        .bible-ver-status{font-size:11px;color:var(--text2);margin-top:2px;}
+        .bible-ver-actions{display:flex;gap:6px;flex-shrink:0;}
+        .bible-dl-bar{height:3px;background:var(--bg3);border-radius:2px;margin-top:4px;overflow:hidden;display:none;}
+        .bible-dl-bar-fill{height:100%;background:var(--accent);border-radius:2px;width:0%;transition:width 0.3s;}
+
+        /* SCROLLBAR */
+        ::-webkit-scrollbar{width:3px;}
+        ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+        .sel-pill{flex:1;display:flex;align-items:center;justify-content:space-between;gap:4px;padding:9px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:12px;font-family:'NotoSansTamil',sans-serif;cursor:pointer;min-width:0;transition:border-color 0.2s;}
+        .sel-pill:active{border-color:var(--accent);}
+        .sel-pill span{flex:1;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+        /* NUMBER SEARCH BOX */
+        .num-search-box{display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:0 10px;gap:6px;flex:0 0 108px;}
+        .num-search-box input{width:44px;background:none;border:none;padding:9px 0;color:var(--text);font-size:14px;font-family:'NotoSansTamil',sans-serif;outline:none;text-align:center;}
+        .num-search-box input[type=number]::-webkit-inner-spin-button,
+        .num-search-box input[type=number]::-webkit-outer-spin-button {-webkit-appearance: none;margin: 0;}
+
+        /* BIBLE PICKER overlay (in main app) */
+        #bible-picker-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:110;display:none;flex-direction:column;}
+        #bible-picker-overlay.open{display:flex;}
+        .bp-header{display:flex;align-items:center;padding:14px 16px;background:var(--bg2);border-bottom:1px solid var(--border);gap:10px;flex-shrink:0;}
+        .bp-header h3{flex:1;font-size:16px;}
+        #bible-picker-list{flex:1;overflow-y:auto;}
+        #bible-picker-list.testament-split{display:flex;flex-direction:row;overflow:hidden;align-items:stretch;gap:10px;padding:12px;}
+        .testament-col{flex:1;min-width:0;display:flex;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+        .bp-books-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px;}
+        .col{display:flex;flex-direction:column;}
+        .title{font-weight:600;padding:8px;text-align:center;position:sticky;top:0;background:var(--bg2);}
+
+
+        details[open] summary svg{transform:rotate(180deg);}
+        details summary svg{transition:transform 0.2s;}
+
+        /* BIBLE PINCH-ZOOM SCOPE — keep vertical scroll, block pinch/pan gestures so
+           the browser never handles the pinch as a page zoom */
+        #bible-single,#bible-split,.split-col-scroll{touch-action:pan-y;}
+        .bible-pinch-hint{padding:4px 14px;font-size:10px;color:var(--text2);text-align:center;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:5px;}
+        .bible-pinch-hint svg{width:13px;height:13px;flex-shrink:0;opacity:0.8;}
+        .bible-pinch-hint span{padding-top: 3px;}
+    </style>
+</head>
+<body>
+<div id="app">
+
+    <!-- ===== SONGS PAGE ===== -->
+    <div id="page-songs" class="page active">
+        <!-- Book header — shown only when a specific Song Book is open -->
+        <div class="book-header" id="book-header" style="display:none;">
+            <button class="icon-btn" onclick="closeBook()" style="margin-right:2px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"/>
+                </svg>
+            </button>
+            <h1 id="book-header-name"></h1>
+            <div class="book-header-actions" id="book-header-actions"></div>
+        </div>
+        <div class="page-header" style="flex-direction:column;align-items:stretch;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <div class="split-picker" id="book-filter-picker" style="flex:1;min-width:0;">
+                    <div class="split-picker-btn" onclick="toggleBookFilterDropdown()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                             style="width:13px;height:13px;flex-shrink:0;" title="Filter">
+                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                        </svg>
+                        <span id="book-filter-label">All Song Books</span>
+                    </div>
+                    <div class="split-dropdown" id="book-filter-dropdown" style="display:none;">
+                        <div class="split-dropdown-inner" id="book-filter-dropdown-list"></div>
+                    </div>
+                </div>
+                <button class="icon-btn" id="fav-filter-btn" onclick="toggleFavFilter()"
+                        title="Favourites" style="flex-shrink:0;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon
+                            points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                    </svg>
+                </button>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <div class="search-box" id="songs-search-box" style="flex:1;min-width:0;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="m21 21-4.35-4.35"/>
+                    </svg>
+                    <input id="songs-search" type="text" data-ph-key="searchByLyrics" placeholder="Search song by lyrics..."
+                           autocomplete="off" onfocus="castingKeyboardWarn()" onclick="castingKeyboardWarn()">
+                </div>
+                <div class="num-search-box" id="songs-num-search-box" style="flex:0 0 108px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         style="width:14px;height:14px;color:var(--text2);flex-shrink:0;">
+                        <line x1="3" y1="12" x2="21" y2="12"/>
+                        <line x1="3" y1="6" x2="21" y2="6"/>
+                        <line x1="3" y1="18" x2="21" y2="18"/>
+                    </svg>
+                    <input id="songs-num-search" type="number" inputmode="numeric" data-ph-key="searchByNumber" placeholder="S.No"
+                           autocomplete="off" onfocus="castingKeyboardWarn()" onclick="castingKeyboardWarn()"
+                           style="width:100%;">
+                </div>
+                <button class="btn btn-primary btn-sm" id="header-add-song-btn" style="display:none;flex-shrink:0;" onclick="openAddSongModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">
+                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    <span id="header-add-song-label">Add Song</span>
+                </button>
+            </div>
+        </div>
+        <div class="tabs" id="songs-tabs" style="display:none;">
+            <div class="tab active" data-tab="all" onclick="switchSongsTab('all',this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18V5l12-2v13"/>
+                    <circle cx="6" cy="18" r="3"/>
+                    <circle cx="18" cy="16" r="3"/>
+                </svg>
+                <span data-lang-en="All Songs" data-lang-ta="அனைத்தும்">All Songs</span><span class="tab-count" id="tab-count-all"></span>
+            </div>
+            <div class="tab" data-tab="fav" onclick="switchSongsTab('fav',this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon
+                            points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+                <span data-lang-en="Favourites" data-lang-ta="பிரியமானவை">Favourites</span><span class="tab-count" id="tab-count-fav"></span>
+            </div>
+            <div class="tab" data-tab="recent" onclick="switchSongsTab('recent',this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <span data-lang-en="Recent" data-lang-ta="சமீபத்தில்">Recent</span><span class="tab-count" id="tab-count-recent"></span>
+            </div>
+        </div>
+        <div class="scroll-area" id="songs-list"></div>
+    </div>
+
+    <!-- ===== SONG DETAIL PAGE (full page, not modal) ===== -->
+    <div id="page-song-detail" class="page">
+        <div class="page-header">
+            <button class="icon-btn" onclick="closeSongDetail()" style="margin-right:4px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"/>
+                </svg>
+            </button>
+            <div style="flex:1;min-width:0;"></div>
+            <button class="icon-btn" id="detail-fav-btn" onclick="toggleDetailFav()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon
+                            points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+            </button>
+            <button class="icon-btn" id="detail-edit-btn" onclick="openEditSongModal(state.currentSongId)" style="display:none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 20h9"/>
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                </svg>
+            </button>
+            <button class="icon-btn" id="detail-delete-btn" onclick="openDeleteSongModal(state.currentSongId)" style="display:none;color:var(--danger);border-color:var(--danger);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                </svg>
+            </button>
+        </div>
+        <div class="scroll-area" id="detail-content" style="padding:28px 20px 40px;text-align:center;"></div>
+    </div>
+
+    <!-- ===== BIBLE PAGE ===== -->
+    <div id="page-bible" class="page">
+        <div class="page-header" style="flex-wrap:wrap;gap:6px;padding:8px 10px;">
+            <div id="bible-header-selectors" style="display:flex;gap:6px;width:100%;">
+                <button class="sel-pill" id="bible-ver-pill" onclick="openBiblePicker('version')">
+                    <span id="bible-ver-label">KJV</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         style="width:12px;height:12px;flex-shrink:0;">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </button>
+                <button class="sel-pill" id="bible-book-pill" onclick="openBiblePicker('book')"
+                        style="flex:2;">
+                    <span id="bible-book-label">John</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         style="width:12px;height:12px;flex-shrink:0;">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </button>
+                <button class="sel-pill" id="bible-ch-pill" onclick="openBiblePicker('chapter')"
+                        style="flex:0.8;">
+                    <span id="bible-ch-label">3</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         style="width:12px;height:12px;flex-shrink:0;">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class="tabs" id="bible-view-tabs">
+            <div class="tab active" data-tab="single" onclick="switchBibleView('single',this)">
+                Single
+            </div>
+            <div class="tab" data-tab="search" onclick="switchBibleView('search',this)">Search</div>
+            <div class="tab" data-tab="split" onclick="switchBibleView('split',this)">Split</div>
+        </div>
+        <div class="bible-pinch-hint">
+            <svg viewBox="0 0 416.979 416.979" fill="currentColor">
+              <path d="M356.004,61.156c-81.37-81.47-213.377-81.551-294.848-0.182c-81.47,81.371-81.552,213.379-0.181,294.85 c81.369,81.47,213.378,81.551,294.849,0.181C437.293,274.636,437.375,142.626,356.004,61.156z M237.6,340.786 c0,3.217-2.607,5.822-5.822,5.822h-46.576c-3.215,0-5.822-2.605-5.822-5.822V167.885c0-3.217,2.607-5.822,5.822-5.822h46.576 c3.215,0,5.822,2.604,5.822,5.822V340.786z M208.49,137.901c-18.618,0-33.766-15.146-33.766-33.765 c0-18.617,15.147-33.766,33.766-33.766c18.619,0,33.766,15.148,33.766,33.766C242.256,122.755,227.107,137.901,208.49,137.901z"/>
+            </svg>
+            <span>Pinch with two fingers on the text to zoom in or out</span>
+        </div>
+        <div id="bible-single" class="scroll-area"></div>
+        <div id="bible-search" class="scroll-area" style="display:none;">
+            <div style="padding:8px 10px;background:var(--bg2);border-bottom:1px solid var(--border);">
+                <div style="display:flex;gap:6px;margin-bottom:8px;">
+                    <button class="sel-pill" id="search-ver-pill" onclick="openBiblePicker('version','search')">
+                        <span id="search-ver-label">All Versions</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                             style="width:12px;height:12px;flex-shrink:0;">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </button>
+                    <button class="sel-pill" id="search-book-pill" onclick="openBiblePicker('book','search')"
+                            style="flex:2;">
+                        <span id="search-book-label">All Books</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                             style="width:12px;height:12px;flex-shrink:0;">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </button>
+                    <button class="sel-pill" id="search-ch-pill" onclick="openBiblePicker('chapter','search')"
+                            style="flex:0.8;">
+                        <span id="search-ch-label">All</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                             style="width:12px;height:12px;flex-shrink:0;">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="search-box">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="m21 21-4.35-4.35"/>
+                    </svg>
+                    <input id="bible-word-search" type="text" data-ph-key="searchVersesByWords" placeholder="Search verses by words..."
+                           autocomplete="off" oninput="onBibleWordSearchInput()"
+                           onkeydown="if(event.key==='Enter'){clearTimeout(bibleSearchDebounceTimer);runBibleSearch();}"
+                           onfocus="castingKeyboardWarn()" onclick="castingKeyboardWarn()">
+                </div>
+            </div>
+            <div id="bible-search-results"></div>
+        </div>
+        <div id="bible-split" class="split-view" style="display:none;flex:1;overflow:hidden;"></div>
+    </div>
+
+
+    <!-- ===== SETTINGS PAGE ===== -->
+    <div id="page-settings" class="page">
+        <div class="page-header"><h1>Settings</h1></div>
+        <div class="scroll-area">
+            <details open>
+                <summary class="settings-section-header"
+                         style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;">
+                    Appearance
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         style="width:14px;height:14px;">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </summary>
+                <div class="theme-grid" id="theme-grid"></div>
+            </details>
+            <div class="settings-section-header">Language</div>
+            <div class="settings-row" onclick="toggleLanguage()">
+                <div class="settings-row-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    </svg>
+                </div>
+                <span class="settings-row-label">App Language</span>
+                <span class="settings-row-value" id="lang-value">English <svg viewBox="0 0 24 24"
+                                                                              fill="none"
+                                                                              stroke="currentColor"
+                                                                              stroke-width="2"><polyline
+                        points="9 18 15 12 9 6"/></svg></span>
+            </div>
+            <details open>
+                <summary class="settings-section-header"
+                         style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;">
+                    Bible Versions
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         style="width:14px;height:14px;">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </summary>
+                <div id="bible-ver-manager"></div>
+            </details>
+            <div class="settings-section-header">Data</div>
+            <div class="settings-row" onclick="openExportDialog()">
+                <div class="settings-row-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                </div>
+                <span class="settings-row-label">Export Song Books</span>
+                <span class="settings-row-value"><svg viewBox="0 0 24 24" fill="none"
+                                                      stroke="currentColor" stroke-width="2"><polyline
+                        points="9 18 15 12 9 6"/></svg></span>
+            </div>
+            <div class="settings-row" onclick="openImportDialog()">
+                <div class="settings-row-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                </div>
+                <span class="settings-row-label">Import Song Book</span>
+                <span class="settings-row-value"><svg viewBox="0 0 24 24" fill="none"
+                                                      stroke="currentColor" stroke-width="2"><polyline
+                        points="9 18 15 12 9 6"/></svg></span>
+            </div>
+            <div style="padding:14px;">
+                <details>
+                    <summary
+                            style="font-size:12px;color:var(--text2);cursor:pointer;user-select:none;">
+                        Advanced Options
+                    </summary>
+                    <div style="margin-top:10px;padding:12px;background:var(--bg3);border-radius:10px;border:1px solid var(--border);">
+                        <p style="font-size:12px;color:var(--text2);margin-bottom:10px;">Danger zone
+                            — these actions cannot be undone.</p>
+                        <button class="btn btn-danger btn-sm"
+                                style="width:100%;justify-content:center;"
+                                onclick="clearAllSongs()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="2" style="width:14px;height:14px;">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                            </svg>
+                            Clear All My Songs
+                        </button>
+                    </div>
+                </details>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== BOTTOM NAV ===== -->
+    <nav id="bottom-nav">
+        <button class="nav-btn active" id="nav-songs" onclick="showPage('songs')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18V5l12-2v13"/>
+                <circle cx="6" cy="18" r="3"/>
+                <circle cx="18" cy="16" r="3"/>
+            </svg>
+            <span data-lang-en="Songs" data-lang-ta="பாடல்">Songs</span>
+        </button>
+        <button class="nav-btn" id="nav-bible" onclick="showPage('bible')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+            <span data-lang-en="Bible" data-lang-ta="வேதாகமம்">Bible</span>
+        </button>
+        <button class="nav-btn" id="nav-cast" onclick="openCastController()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="7" width="20" height="15" rx="2"/>
+                <polyline points="17 2 12 7 7 2"/>
+            </svg>
+            <span data-lang-en="Cast" data-lang-ta="காஸ்ட்">Cast</span>
+        </button>
+        <button class="nav-btn" id="nav-settings" onclick="showPage('settings')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            <span data-lang-en="Settings" data-lang-ta="அமைப்புகள்">Settings</span>
+        </button>
+    </nav>
+</div>
+
+<!-- CAST INDICATOR -->
+<div id="cast-indicator" onclick="openCastController()" style="display:none;">
+    <div id="cast-dot"></div>
+    <span id="cast-label">Not Connected</span>
+</div>
+
+<!-- Hidden selects -->
+<select id="bible-version" style="display:none;"></select>
+<select id="bible-book" style="display:none;"></select>
+<select id="bible-chapter" style="display:none;"></select>
+
+<!-- BIBLE PICKER OVERLAY -->
+<div id="bible-picker-overlay">
+    <div class="bp-header">
+        <button class="icon-btn" onclick="closeBiblePicker()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+        </button>
+        <h3 id="bible-picker-title">Select</h3>
+    </div>
+    <div id="bible-picker-search-row"
+         style="padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border);">
+        <input id="bible-picker-search" type="text" data-ph-key="bibleSearchPh" placeholder="Search..."
+               oninput="filterBiblePicker(this.value)" onfocus="castingKeyboardWarn()" onclick="castingKeyboardWarn()"
+               style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:14px;font-family:'NotoSansTamil',sans-serif;outline:none;">
+    </div>
+    <div id="bible-picker-list" style="flex:3;overflow-y:auto;background:var(--bg);align-content: start;"></div>
+</div>
+
+
+<!-- MODAL -->
+<div id="modal-overlay" class="modal-overlay">
+    <div class="modal" id="modal-box">
+        <div class="modal-header">
+            <div class="modal-icon" id="modal-icon-el"></div>
+            <h2 id="modal-title"></h2>
+            <button class="icon-btn" onclick="closeModal()" style="margin-left:4px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-body" id="modal-body"></div>
+        <div class="modal-footer" id="modal-footer"></div>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+    // ============================================================
+    // BIBLE BOOKS
+    // ============================================================
+    var BIBLE_BOOKS=[{n:"Genesis",s:"gen",ch:50},{n:"Exodus",s:"exo",ch:40},{n:"Leviticus",s:"lev",ch:27},{n:"Numbers",s:"num",ch:36},{n:"Deuteronomy",s:"deu",ch:34},{n:"Joshua",s:"jos",ch:24},{n:"Judges",s:"jdg",ch:21},{n:"Ruth",s:"rut",ch:4},{n:"1 Samuel",s:"1sa",ch:31},{n:"2 Samuel",s:"2sa",ch:24},{n:"1 Kings",s:"1ki",ch:22},{n:"2 Kings",s:"2ki",ch:25},{n:"1 Chronicles",s:"1ch",ch:29},{n:"2 Chronicles",s:"2ch",ch:36},{n:"Ezra",s:"ezr",ch:10},{n:"Nehemiah",s:"neh",ch:13},{n:"Esther",s:"est",ch:10},{n:"Job",s:"job",ch:42},{n:"Psalms",s:"psa",ch:150},{n:"Proverbs",s:"pro",ch:31},{n:"Ecclesiastes",s:"ecc",ch:12},{n:"Song of Solomon",s:"sng",ch:8},{n:"Isaiah",s:"isa",ch:66},{n:"Jeremiah",s:"jer",ch:52},{n:"Lamentations",s:"lam",ch:5},{n:"Ezekiel",s:"eze",ch:48},{n:"Daniel",s:"dan",ch:12},{n:"Hosea",s:"hos",ch:14},{n:"Joel",s:"joe",ch:3},{n:"Amos",s:"amo",ch:9},{n:"Obadiah",s:"oba",ch:1},{n:"Jonah",s:"jon",ch:4},{n:"Micah",s:"mic",ch:7},{n:"Nahum",s:"nah",ch:3},{n:"Habakkuk",s:"hab",ch:3},{n:"Zephaniah",s:"zep",ch:3},{n:"Haggai",s:"hag",ch:2},{n:"Zechariah",s:"zec",ch:14},{n:"Malachi",s:"mal",ch:4},{n:"Matthew",s:"mat",ch:28},{n:"Mark",s:"mrk",ch:16},{n:"Luke",s:"luk",ch:24},{n:"John",s:"jhn",ch:21},{n:"Acts",s:"act",ch:28},{n:"Romans",s:"rom",ch:16},{n:"1 Corinthians",s:"1co",ch:16},{n:"2 Corinthians",s:"2co",ch:13},{n:"Galatians",s:"gal",ch:6},{n:"Ephesians",s:"eph",ch:6},{n:"Philippians",s:"php",ch:4},{n:"Colossians",s:"col",ch:4},{n:"1 Thessalonians",s:"1th",ch:5},{n:"2 Thessalonians",s:"2th",ch:3},{n:"1 Timothy",s:"1ti",ch:6},{n:"2 Timothy",s:"2ti",ch:4},{n:"Titus",s:"tit",ch:3},{n:"Philemon",s:"phm",ch:1},{n:"Hebrews",s:"heb",ch:13},{n:"James",s:"jas",ch:5},{n:"1 Peter",s:"1pe",ch:5},{n:"2 Peter",s:"2pe",ch:3},{n:"1 John",s:"1jo",ch:5},{n:"2 John",s:"2jo",ch:1},{n:"3 John",s:"3jo",ch:1},{n:"Jude",s:"jud",ch:1},{n:"Revelation",s:"rev",ch:22}];
+    var TAMIL_BOOKS=["ஆதியாகமம்","யாத்திராகமம்","லேவியராகமம்","எண்ணாகமம்","உபாகமம்","யோசுவா","நியாயாதிபதிகள்","ரூத்","1 சாமுவேல்","2 சாமுவேல்","1 இராஜாக்கள்","2 இராஜாக்கள்","1 நாளாகமம்","2 நாளாகமம்","எஸ்றா","நெகேமியா","எஸ்தர்","யோபு","சங்கீதம்","நீதிமொழிகள்","பிரசங்கி","உன்னதப்பாட்டு","ஏசாயா","எரேமியா","புலம்பல்","எசேக்கியேல்","தானியேல்","ஓசியா","யோவேல்","ஆமோஸ்","ஒபதியா","யோனா","மீகா","நாகூம்","ஆபகூக்","செப்பனியா","ஆகாய்","சகரியா","மல்கியா","மத்தேயு","மாற்கு","லூக்கா","யோவான்","அப்போஸ்தலர்","ரோமர்","1 கொரிந்தியர்","2 கொரிந்தியர்","கலாத்தியர்","எபேசியர்","பிலிப்பியர்","கொலோசெயர்","1 தெசலோனிக்கேயர்","2 தெசலோனிக்கேயர்","1 தீமோத்தேயு","2 தீமோத்தேயு","தீத்து","பிலேமோன்","எபிரேயர்","யாக்கோபு","1 பேதுரு","2 பேதுரு","1 யோவான்","2 யோவான்","3 யோவான்","யூதா","வெளிப்படுத்தல்"];
+
+
+    var VERSIONS=[{v:'TAMOVR',label:'Tamil OVR'},{v:'TAMBL98',label:'Tamil BL98'},{v:'TBSI',label:'Tamil TRUST'},{v:'KJV',label:'KJV'},{v:'NKJV',label:'NKJV'},{v:'NIV',label:'NIV'},{v:'NIV2011',label:'NIV 2011'},{v:'ESV',label:'ESV'},{v:'NLT',label:'NLT'},{v:'NASB',label:'NASB'},{v:'YLT',label:'YLT'},{v:'WEB',label:'WEB'},{v:'ASV',label:'ASV'},{v:'BSB',label:'BSB'},{v:'LSB',label:'LSB'}];
+    var TAMIL_VERSIONS=['TAMOVR','TAMBL98','TBSI'];
+
+    // ============================================================
+    // STATE
+    // ============================================================
+    var state={
+      books:[],currentBookId:null,bookFilterId:'',
+      favourites:[],recentSongs:[],songsTab:'all',favFilter:false,
+      theme:'dark',lang:'en',
+      editingSongId:null,
+      bibleView:'single',bibleVersion:'KJV',bibleBook:43,bibleChapter:3,
+      bibleVerses:[],bibleFontSize:16,
+      searchVersion:'',searchBook:'',searchChapter:'',
+      currentSongId:null,currentBookIdForSong:null,
+      splitVerLeft:'KJV',splitVerRight:'TAMOVR',
+      splitBookLeft:43,splitChLeft:3,
+      splitBookRight:43,splitChRight:3,
+    };
+
+    // ============================================================
+    // LYRICS
+    // ============================================================
+    function cleanLyrics(raw){
+      if(!raw)return '';
+      return raw.split('\n').map(function(l){return l.replace(/\s+$/,'');}).join('\n').replace(/\n{3,}/g,'\n\n').trim();
+    }
+
+    // ============================================================
+    // STORAGE
+    // ============================================================
+    function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+    function load(k,d){try{var v=localStorage.getItem(k);return v!==null?JSON.parse(v):d;}catch(e){return d;}}
+    function genId(prefix){return prefix+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);}
+
+    function loadState(){
+      state.favourites=load('favourites',[]);
+      state.recentSongs=load('recentSongs',[]);
+      state.theme=load('theme','dark');
+      state.lang=load('lang','en');
+      state.bibleFontSize=load('bibleFontSize',16);
+    }
+    function saveState(){
+      save('favourites',state.favourites);save('recentSongs',state.recentSongs);
+      save('theme',state.theme);save('lang',state.lang);
+    }
+    function saveUserBooks(){save('userBooks',state.books.filter(function(b){return b.source==='user';}));}
+    function loadUserBooks(){return load('userBooks',null);}
+
+    // Any songs saved before Song Books existed (a flat 'songs' array) are migrated
+    // into a new "My Songs" user book the first time this runs, so nothing is lost.
+    function migrateLegacySongsIfNeeded(){
+      var legacy=load('songs',null);
+      if(!legacy||!legacy.length)return null;
+      return {
+        id:'user_migrated',name:'My Songs',source:'user',
+        songs:legacy.map(function(s){
+          return{
+            songId:s.id||genId('song'),
+            songNumber:s.number||0,
+            title:s.titleTamil||s.titleEnglish||s.title||'Untitled',
+            lyrics:cleanLyrics(s.lyrics||'')
+          };
+        })
+      };
+    }
+
+    // Keeps the legacy flat 'songs' (+'favourites') localStorage shape in sync so the
+    // separate live Cast controller/presenter screens (controller.html / presenter.html),
+    // which read that shape directly and are unrelated to the Song Books feature,
+    // keep listing and presenting every song from every book.
+    function syncLegacyCastBridge(){
+      var flat=[];
+      state.books.forEach(function(b){
+        b.songs.forEach(function(s){
+          flat.push({id:s.songId,number:s.songNumber,titleTamil:s.title,titleEnglish:'',category:'',lyrics:s.lyrics});
+        });
+      });
+      save('songs',flat);
+      // Full Song Book grouping (id/name/source/songs) for the Cast Controller's
+      // Song Books navigation — the flat 'songs' bridge above loses book boundaries,
+      // so this preserves them without changing the legacy shape anything else reads.
+      save('castSongBooks',state.books);
+    }
+    // Runs after every user-book mutation (create/rename/delete/import/add-song/etc.)
+    // so the Song Books filter dropdown never goes stale.
+    function persistAndSync(){saveUserBooks();syncLegacyCastBridge();renderBookDropdownOptions();}
+
+    // ============================================================
+    // IMPORTED (API-style) SONG BOOKS — fake/mock data for now.
+    // Swap the fetch() below for a real API call later; nothing else has to change.
+    // ============================================================
+    var IMPORTED_BOOK2_SONGS=[
+      {songId:'ch_1',songNumber:1,title:'Amazing Grace',lyrics:'Amazing grace! How sweet the sound\nThat saved a wretch like me!\nI once was lost, but now am found,\nWas blind, but now I see.\n\n\'Twas grace that taught my heart to fear,\nAnd grace my fears relieved;\nHow precious did that grace appear\nThe hour I first believed.'},
+      {songId:'ch_2',songNumber:2,title:'Holy, Holy, Holy',lyrics:'Holy, holy, holy! Lord God Almighty!\nEarly in the morning our song shall rise to Thee;\nHoly, holy, holy! Merciful and mighty!\nGod in three Persons, blessed Trinity!\n\nHoly, holy, holy! All the saints adore Thee,\nCasting down their golden crowns around the glassy sea;\nCherubim and seraphim falling down before Thee,\nWhich wert, and art, and evermore shalt be.'},
+      {songId:'ch_3',songNumber:3,title:'Blessed Assurance',lyrics:'Blessed assurance, Jesus is mine!\nOh, what a foretaste of glory divine!\nHeir of salvation, purchase of God,\nBorn of His Spirit, washed in His blood.\n\nThis is my story, this is my song,\nPraising my Savior all the day long;\nThis is my story, this is my song,\nPraising my Savior all the day long.'},
+      {songId:'ch_4',songNumber:4,title:'It Is Well With My Soul',lyrics:'When peace, like a river, attendeth my way,\nWhen sorrows like sea billows roll;\nWhatever my lot, Thou hast taught me to say,\nIt is well, it is well with my soul.\n\nIt is well with my soul,\nIt is well, it is well with my soul.'},
+      {songId:'ch_5',songNumber:5,title:'Come Thou Fount of Every Blessing',lyrics:'Come Thou Fount of every blessing,\nTune my heart to sing Thy grace;\nStreams of mercy, never ceasing,\nCall for songs of loudest praise.\n\nTeach me some melodious sonnet,\nSung by flaming tongues above;\nPraise the mount, I\'m fixed upon it,\nMount of Thy redeeming love.'},
+      {songId:'ch_6',songNumber:6,title:'When I Survey the Wondrous Cross',lyrics:'When I survey the wondrous cross\nOn which the Prince of glory died,\nMy richest gain I count but loss,\nAnd pour contempt on all my pride.\n\nSee, from His head, His hands, His feet,\nSorrow and love flow mingled down;\nDid e\'er such love and sorrow meet,\nOr thorns compose so rich a crown?'},
+      {songId:'ch_7',songNumber:7,title:'All Hail the Power of Jesus\' Name',lyrics:'All hail the power of Jesus\' name!\nLet angels prostrate fall;\nBring forth the royal diadem,\nAnd crown Him Lord of all.\n\nBring forth the royal diadem,\nAnd crown Him Lord of all.'},
+      {songId:'ch_8',songNumber:8,title:'Just As I Am',lyrics:'Just as I am, without one plea,\nBut that Thy blood was shed for me,\nAnd that Thou bidst me come to Thee,\nO Lamb of God, I come, I come.\n\nJust as I am, and waiting not\nTo rid my soul of one dark blot,\nTo Thee whose blood can cleanse each spot,\nO Lamb of God, I come, I come.'}
+    ];
+    function loadImportedBooks(cb){
+      var book2={id:'imported_classic',name:'Classic Hymnal',source:'imported',songs:IMPORTED_BOOK2_SONGS};
+      fetch('gk_songs.json').then(function(r){return r.json();}).then(function(data){
+        cb([{id:'imported_gk',name:'GK Song Book',source:'imported',songs:data},book2]);
+      }).catch(function(){
+        cb([{id:'imported_gk',name:'GK Song Book',source:'imported',songs:[]},book2]);
+      });
+    }
+
+    // ============================================================
+    // BOOK / SONG HELPERS
+    // ============================================================
+    function findBook(bookId){return state.books.find(function(b){return b.id===bookId;});}
+    function isUserBook(book){return !!book&&book.source==='user';}
+    function findSongEverywhere(songId){
+      for(var i=0;i<state.books.length;i++){
+        var s=state.books[i].songs.find(function(x){return x.songId===songId;});
+        if(s)return{book:state.books[i],song:s};
+      }
+      return null;
+    }
+
+    // ============================================================
+    // TOAST
+    // ============================================================
+    var toastTimer=null;
+    function toast(msg){var el=document.getElementById('toast');el.textContent=msg;el.style.display='block';if(toastTimer)clearTimeout(toastTimer);toastTimer=setTimeout(function(){el.style.display='none';},2500);}
+    function toastWarn(msg){var el=document.getElementById('toast');el.innerHTML='<svg fill="currentColor" viewBox="-2 -3 24 24" style="width:16px;height:16px;vertical-align:middle;margin-right:6px;flex-shrink:0;"><path d="M12.8 1.613l6.701 11.161c.963 1.603.49 3.712-1.057 4.71a3.213 3.213 0 0 1-1.743.516H3.298C1.477 18 0 16.47 0 14.581c0-.639.173-1.264.498-1.807L7.2 1.613C8.162.01 10.196-.481 11.743.517c.428.276.79.651 1.057 1.096zM10 14a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm0-9a1 1 0 0 0-1 1v4a1 1 0 0 0 2 0V6a1 1 0 0 0-1-1z"/></svg>'+msg;el.style.display='flex';el.style.alignItems='center';if(toastTimer)clearTimeout(toastTimer);toastTimer=setTimeout(function(){el.style.display='none';},2500);}
+    // ============================================================
+    // LANGUAGE
+    // ============================================================
+    var STRINGS={
+      en:{songs:'Songs',bible:'Bible',add:'Add',settings:'Settings',addSong:'Add Song',editSong:'Edit Song',appLang:'English',
+        allSongBooks:'All Song Books',searchByLyrics:'Search song by lyrics...',searchByNumber:'S.No',
+        searchVersesByWords:'Search verses by words...',bibleSearchPh:'Search...',
+        songNumberPh:'e.g. 42',songTitlePh:'e.g. Amazing Grace',lyricsPh:'Song lyrics...',bookNamePh:'e.g. Youth Choir Songs'},
+      ta:{songs:'பாடல்',bible:'வேதாகமம்',add:'சேர்',settings:'அமைப்புகள்',addSong:'புதிய பாடல்',editSong:'பாடல் திருத்து',appLang:'தமிழ்',
+        allSongBooks:'அனைத்து பாடல் புத்தகங்களும்',searchByLyrics:'பாடல் வரிகள் மூலம் தேடு...',searchByNumber:'எண்',
+        searchVersesByWords:'வார்த்தைகள் மூலம் வசனங்களைத் தேடு...',bibleSearchPh:'தேடு...',
+        songNumberPh:'எ.கா. 42',songTitlePh:'எ.கா. அற்புத கிருபை',lyricsPh:'பாடல் வரிகள்...',bookNamePh:'எ.கா. இளையோர் பாடல்கள்'}
+    };
+    function t(key){return(STRINGS[state.lang]||STRINGS.en)[key]||key;}
+    function applyLanguage(){
+      var lang=state.lang;
+      document.querySelectorAll('[data-lang-en]').forEach(function(el){el.textContent=lang==='ta'?(el.getAttribute('data-lang-ta')||el.getAttribute('data-lang-en')):el.getAttribute('data-lang-en');});
+      document.querySelectorAll('[data-ph-key]').forEach(function(el){el.placeholder=t(el.getAttribute('data-ph-key'));});
+      document.getElementById('lang-value').innerHTML=t('appLang')+' <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;display:inline-block;vertical-align:middle;"><polyline points="9 18 15 12 9 6"/></svg>';
+      renderBookDropdownOptions();
+    }
+    function toggleLanguage(){state.lang=state.lang==='en'?'ta':'en';save('lang',state.lang);applyLanguage();renderSongsPage();}
+
+    // ============================================================
+    // THEME
+    // ============================================================
+    var THEMES=[{id:'dark',label:'Dark Purple'},{id:'light',label:'Light'},{id:'ocean',label:'Ocean Blue'},{id:'forest',label:'Forest'},{id:'sunset',label:'Sunset'},{id:'gold',label:'Royal Gold'}];
+    var THEME_CLASSES={dark:'',light:'theme-light',ocean:'theme-ocean',forest:'theme-forest',sunset:'theme-sunset',gold:'theme-gold'};
+    function applyTheme(id){Object.values(THEME_CLASSES).forEach(function(c){if(c)document.body.classList.remove(c);});if(THEME_CLASSES[id])document.body.classList.add(THEME_CLASSES[id]);state.theme=id;save('theme',id);renderThemeGrid();if(window.Android&&typeof window.Android.syncTheme==='function')window.Android.syncTheme(id);}
+    var THEME_VARS={
+      dark: {bg:'#1a0a2e',bg2:'#2d1b4e',accent:'#9b59b6',text:'#e8e0f0',border:'#4a3060'},
+      light:{bg:'#f5f5f5',bg2:'#fff',accent:'#7b2fbe',text:'#1a1a2e',border:'#d0c0e0'},
+      ocean:{bg:'#0a1628',bg2:'#102040',accent:'#2196f3',text:'#d0e8ff',border:'#1e4070'},
+      forest:{bg:'#0d1f0d',bg2:'#1a3320',accent:'#4caf50',text:'#d4e8d4',border:'#2e5a30'},
+      sunset:{bg:'#1f0a00',bg2:'#3a1500',accent:'#ff6b35',text:'#ffe8d0',border:'#5a2800'},
+      gold:{bg:'#1a1400',bg2:'#2e2400',accent:'#ffd700',text:'#fff5cc',border:'#4a3c00'},
+    };
+    function renderThemeGrid(){
+      var g=document.getElementById('theme-grid');if(!g)return;
+      g.innerHTML=THEMES.map(function(t){
+        var v=THEME_VARS[t.id]||THEME_VARS.dark;
+        var preview=
+          '<div style="width:100%;height:36px;border-radius:6px;background:'+v.bg+';border:1px solid '+v.border+';margin-bottom:6px;overflow:hidden;display:flex;flex-direction:column;gap:2px;padding:4px 5px;box-sizing:border-box;">'+
+            '<div style="display:flex;gap:3px;align-items:center;">'+
+              '<div style="width:8px;height:8px;border-radius:50%;background:'+v.accent+';"></div>'+
+              '<div style="flex:1;height:4px;border-radius:2px;background:'+v.text+';opacity:0.5;"></div>'+
+            '</div>'+
+            '<div style="height:3px;border-radius:2px;background:'+v.accent+';width:60%;opacity:0.8;"></div>'+
+            '<div style="height:3px;border-radius:2px;background:'+v.text+';opacity:0.2;width:80%;"></div>'+
+          '</div>';
+        return '<button class="theme-btn'+(state.theme===t.id?' active':'')+'" onclick="applyTheme(\''+t.id+'\')" style="display:flex;flex-direction:column;align-items:stretch;">'+
+          preview+
+          '<span style="font-size:11px;">'+t.label+'</span>'+
+        '</button>';
+      }).join('');
+    }
+
+    // ============================================================
+    // PAGE NAV
+    // ============================================================
+    function showPage(id){
+      document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+      document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active');});
+      var pg=document.getElementById('page-'+id);
+      var nb=document.getElementById('nav-'+(id==='song-detail'?'songs':id));
+      if(pg)pg.classList.add('active');
+      if(nb)nb.classList.add('active');
+      if(id==='songs'){renderBookDropdownOptions();updateFavFilterBtnStyle();renderSongsPage();}
+      if(id==='settings'){renderThemeGrid();renderBibleVerManager();}
+    }
+
+    // ============================================================
+    // SONGS PAGE — book grid / cross-book search / single-book view
+    // ============================================================
+    function bookIcon(){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';}
+    function emptyStateHtml(msg){return '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><p>'+esc(msg)+'</p></div>';}
+    function songCardHtml(s,bookId){
+      var isFav=state.favourites.indexOf(s.songId)>-1;
+      return '<div class="song-card" onclick="openSongDetail(\''+bookId+'\',\''+s.songId+'\')">'+
+        '<div class="song-num">'+s.songNumber+'</div>'+
+        '<div class="song-info"><div class="song-title-ta">'+esc(s.title)+'</div></div>'+
+        '<button class="fav-btn'+(isFav?' active':'')+'" onclick="event.stopPropagation();toggleFav(\''+s.songId+'\')">'+
+          '<svg viewBox="0 0 24 24" fill="'+(isFav?'#ffd700':'none')+'" stroke="'+(isFav?'#ffd700':'currentColor')+'" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'+
+        '</button>'+
+      '</div>';
+    }
+    function applyTextNumFavFilters(songs,q,numQ,favOnly){
+      var out=songs;
+      if(favOnly)out=out.filter(function(s){return state.favourites.indexOf(s.songId)>-1;});
+      if(numQ)out=out.filter(function(s){return String(s.songNumber).indexOf(numQ)===0;});
+      if(q){
+        var ql=q.toLowerCase();
+        out=out.filter(function(s){return (s.title&&s.title.toLowerCase().indexOf(ql)>-1)||(s.lyrics&&s.lyrics.toLowerCase().indexOf(ql)>-1);});
+      }
+      return out;
+    }
+    function filterSongs(songs,q,numQ,favOnly){
+      var out=applyTextNumFavFilters(songs,q,numQ,favOnly).slice();
+      if(q&&!numQ)out.sort(function(a,b){return (a.title||'').localeCompare(b.title||'','ta');});
+      else out.sort(function(a,b){return a.songNumber-b.songNumber;});
+      return out;
+    }
+
+    // Book Books filter — styled/behaves like the Bible Split tab's book selector
+    // (.split-picker / .split-dropdown), so it stays visually consistent across the app
+    // and always reflects the live list of imported + user-created Song Books.
+    function renderBookDropdownOptions(){
+      var label=document.getElementById('book-filter-label');
+      var list=document.getElementById('book-filter-dropdown-list');
+      if(!label||!list)return;
+      if(state.bookFilterId&&!findBook(state.bookFilterId))state.bookFilterId='';
+      var cur=state.bookFilterId||'';
+      var items=[{id:'',name:t('allSongBooks')}].concat(state.books.map(function(b){return{id:b.id,name:b.name};}));
+      list.innerHTML=items.map(function(it){
+        return '<div class="split-dropdown-item'+(cur===it.id?' active':'')+'" onclick="selectBookFilter(\''+it.id+'\')">'+esc(it.name)+'</div>';
+      }).join('');
+      label.textContent=cur?((findBook(cur)||{}).name||t('allSongBooks')):t('allSongBooks');
+    }
+    function toggleBookFilterDropdown(){toggleSplitDropdown('book-filter-picker');}
+    function selectBookFilter(id){
+      state.bookFilterId=id;
+      closeSplitDropdowns();
+      renderBookDropdownOptions();
+      renderGridOrSearch();
+    }
+    function updateFavFilterBtnStyle(){
+      var btn=document.getElementById('fav-filter-btn');
+      if(btn)btn.style.color=state.favFilter?'#ffd700':'';
+    }
+    function onSongsSearchChanged(){renderSongsPage();}
+
+    function renderSongsPage(){
+      if(state.currentBookId)renderBookView();
+      else renderGridOrSearch();
+    }
+
+    function renderBookGrid(list){
+      var cards=state.books.map(function(b){
+        var badge=b.source==='user'?'<span class="book-card-badge user">Created</span>':'<span class="book-card-badge">Imported</span>';
+        return '<div class="book-card" onclick="openBook(\''+b.id+'\')">'+
+          '<div class="book-card-icon">'+bookIcon()+'</div>'+
+          '<div class="book-card-name">'+esc(b.name)+'</div>'+
+          '<div class="book-card-meta">'+badge+'<span>'+b.songs.length+' songs</span></div>'+
+        '</div>';
+      }).join('');
+      list.innerHTML=
+        '<div class="create-book-wrap"><button class="btn create-book-btn" onclick="openCreateBookModal()">'+
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'+
+          ' Create New Songs Book</button></div>'+'<div class="book-grid">'+cards+'</div>';
+    }
+
+    function renderGridOrSearch(){
+      document.getElementById('book-header').style.display='none';
+      document.getElementById('book-filter-picker').style.display='';
+      document.getElementById('fav-filter-btn').style.display='';
+      document.getElementById('songs-tabs').style.display='none';
+      document.getElementById('header-add-song-btn').style.display='none';
+
+      var list=document.getElementById('songs-list');
+      var bookFilterId=state.bookFilterId||'';
+      var q=document.getElementById('songs-search').value.trim();
+      var numQ=document.getElementById('songs-num-search').value.trim();
+      var favOnly=state.favFilter;
+      var hasFilter=!!bookFilterId||!!q||!!numQ||favOnly;
+
+      if(!hasFilter){renderBookGrid(list);return;}
+
+      if(bookFilterId){
+        var book=findBook(bookFilterId);
+        if(!book){renderBookGrid(list);return;}
+        var songs=filterSongs(book.songs,q,numQ,favOnly);
+        if(!songs.length){list.innerHTML=emptyStateHtml('No songs found');return;}
+        list.innerHTML='<div class="book-group-header">'+bookIcon()+esc(book.name)+'</div>'+songs.map(function(s){return songCardHtml(s,book.id);}).join('');
+        return;
+      }
+
+      var groups=state.books.map(function(b){return{book:b,songs:filterSongs(b.songs,q,numQ,favOnly)};}).filter(function(g){return g.songs.length;});
+      if(!groups.length){list.innerHTML=emptyStateHtml('No songs found');return;}
+      list.innerHTML=groups.map(function(g){
+        return '<div class="book-group-header">'+bookIcon()+esc(g.book.name)+'</div>'+g.songs.map(function(s){return songCardHtml(s,g.book.id);}).join('');
+      }).join('');
+    }
+
+    function openBook(bookId){
+      var book=findBook(bookId);if(!book)return;
+      state.currentBookId=bookId;
+      state.songsTab='all';
+      document.getElementById('songs-search').value='';
+      document.getElementById('songs-num-search').value='';
+      document.querySelectorAll('#songs-tabs .tab').forEach(function(t){t.classList.remove('active');});
+      var allTab=document.querySelector('#songs-tabs [data-tab="all"]');if(allTab)allTab.classList.add('active');
+      renderSongsPage();
+    }
+    function closeBook(){
+      state.currentBookId=null;
+      document.getElementById('songs-search').value='';
+      document.getElementById('songs-num-search').value='';
+      renderSongsPage();
+    }
+
+    function renderBookView(){
+      var book=findBook(state.currentBookId);
+      if(!book){closeBook();return;}
+      var userBook=isUserBook(book);
+
+      document.getElementById('book-header').style.display='flex';
+      document.getElementById('book-header-name').textContent=book.name;
+      document.getElementById('book-filter-picker').style.display='none';
+      document.getElementById('fav-filter-btn').style.display='none';
+      document.getElementById('songs-tabs').style.display='flex';
+      document.getElementById('header-add-song-btn').style.display=userBook?'inline-flex':'none';
+
+      var actions=document.getElementById('book-header-actions');
+      if(userBook){
+        actions.innerHTML=
+          '<button class="icon-btn" onclick="openRenameBookModal(\''+book.id+'\')" title="Edit">'+
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>'+
+          '</button>'+
+          '<button class="icon-btn" onclick="openDeleteBookModal(\''+book.id+'\')" title="Delete" style="color:var(--danger);border-color:var(--danger);">'+
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>'+
+          '</button>';
+      }else{
+        actions.innerHTML='<span class="book-card-badge" style="padding:6px 10px;">Imported</span>';
+      }
+
+      var q=document.getElementById('songs-search').value.trim();
+      var numQ=document.getElementById('songs-num-search').value.trim();
+      var list=document.getElementById('songs-list');
+      var songs;
+
+      var idsInBook=book.songs.map(function(s){return s.songId;});
+      var recentOrdered=state.recentSongs.filter(function(id){return idsInBook.indexOf(id)>-1;})
+        .map(function(id){return book.songs.find(function(s){return s.songId===id;});}).filter(Boolean);
+      updateSongsTabCounts(book,recentOrdered,q,numQ);
+
+      // Note: the header's Favourite filter is only shown on the main Songs page —
+      // inside a Song Book, favourites are reached via the dedicated Favourites tab instead.
+      if(state.songsTab==='recent'){
+        songs=applyTextNumFavFilters(recentOrdered,q,numQ,false);
+      }else if(state.songsTab==='fav'){
+        songs=filterSongs(book.songs,q,numQ,true);
+      }else{
+        songs=filterSongs(book.songs,q,numQ,false);
+      }
+
+      if(!songs.length){list.innerHTML=emptyStateHtml('No songs found');return;}
+      list.innerHTML=songs.map(function(s){return songCardHtml(s,book.id);}).join('');
+    }
+
+    // Counts reflect the *currently filtered* collection per tab (lyric/number search
+    // applied), not the book's raw totals — so e.g. "Favourite (3)" only counts matches
+    // that are also favourites, updating live as the user types or switches tabs.
+    function updateSongsTabCounts(book,recentOrdered,q,numQ){
+      var allEl=document.getElementById('tab-count-all');
+      var favEl=document.getElementById('tab-count-fav');
+      var recentEl=document.getElementById('tab-count-recent');
+      if(allEl)allEl.textContent=' ('+applyTextNumFavFilters(book.songs,q,numQ,false).length+')';
+      if(favEl)favEl.textContent=' ('+applyTextNumFavFilters(book.songs,q,numQ,true).length+')';
+      if(recentEl)recentEl.textContent=' ('+applyTextNumFavFilters(recentOrdered,q,numQ,false).length+')';
+    }
+
+    function toggleFav(songId){
+      var i=state.favourites.indexOf(songId);
+      if(i>-1)state.favourites.splice(i,1);else state.favourites.push(songId);
+      save('favourites',state.favourites);
+      renderSongsPage();
+    }
+    function switchSongsTab(tab,el){
+      state.songsTab=tab;
+      document.querySelectorAll('#songs-tabs .tab').forEach(function(t){t.classList.remove('active');});
+      el.classList.add('active');
+      renderBookView();
+    }
+    function toggleFavFilter(){
+      state.favFilter=!state.favFilter;
+      updateFavFilterBtnStyle();
+      renderSongsPage();
+    }
+
+    // ============================================================
+    // SONG DETAIL — simple centered title + lyrics (no course/main/stanza split;
+    // that live-presentation split still lives in the separate Cast controller)
+    // ============================================================
+    function openSongDetail(bookId,songId){
+      var book=findBook(bookId);
+      var song=book&&book.songs.find(function(s){return s.songId===songId;});
+      if(!song)return;
+      state.currentBookIdForSong=bookId;
+      state.currentSongId=songId;
+      state.recentSongs=state.recentSongs.filter(function(x){return x!==songId;});
+      state.recentSongs.unshift(songId);
+      if(state.recentSongs.length>50)state.recentSongs.length=50;
+      save('recentSongs',state.recentSongs);
+      renderSongDetailContent();
+      showPage('song-detail');
+    }
+    function renderSongDetailContent(){
+      var book=findBook(state.currentBookIdForSong);
+      var song=book&&book.songs.find(function(s){return s.songId===state.currentSongId;});
+      if(!song)return;
+      var isFav=state.favourites.indexOf(song.songId)>-1;
+      document.getElementById('detail-fav-btn').style.color=isFav?'#ffd700':'';
+      var canEdit=isUserBook(book);
+      document.getElementById('detail-edit-btn').style.display=canEdit?'flex':'none';
+      document.getElementById('detail-delete-btn').style.display=canEdit?'flex':'none';
+      document.getElementById('detail-content').innerHTML=
+        '<div style="font-size:20px;font-weight:700;color:var(--accent);margin-bottom:22px;">'+'<span style="font-size:22px;color:var(--accent);">'+song.songNumber+'. </span>'+esc(song.title)+'</div>'+
+        '<div style="font-size:16px;color:var(--text);line-height:1.9;white-space:pre-wrap;text-align:center;">'+esc(song.lyrics)+'</div>';
+    }
+    function closeSongDetail(){showPage('songs');}
+    function toggleDetailFav(){
+      var id=state.currentSongId;if(!id)return;
+      var i=state.favourites.indexOf(id);
+      if(i>-1)state.favourites.splice(i,1);else state.favourites.push(id);
+      save('favourites',state.favourites);
+      document.getElementById('detail-fav-btn').style.color=state.favourites.indexOf(id)>-1?'#ffd700':'';
+    }
+
+    // ============================================================
+    // SONG BOOK CRUD — user-created books only; imported books are read-only
+    // both in the UI (controls hidden) and here (handlers refuse to act on them)
+    // ============================================================
+    function openCreateBookModal(){
+      openModal('Create Song Book',
+        '<div class="form-group" style="padding:0;border:none;"><label class="form-label">Song Book Name *</label><input id="new-book-name" class="form-input" placeholder="'+esc(t('bookNamePh'))+'" onfocus="castingKeyboardWarn()" onclick="castingKeyboardWarn()"></div>',
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="confirmCreateBook()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="20 6 9 17 4 12"/></svg> Create</button>',
+        'book');
+      setTimeout(function(){var el=document.getElementById('new-book-name');if(el)el.focus();},80);
+    }
+    function confirmCreateBook(){
+      var name=document.getElementById('new-book-name').value.trim();
+      if(!name){toast('Song Book name is required');return;}
+      state.books.push({id:genId('user'),name:name,source:'user',songs:[]});
+      persistAndSync();closeModal();toast('Song Book created ✓');renderSongsPage();
+    }
+    function openRenameBookModal(bookId){
+      var book=findBook(bookId);if(!book||!isUserBook(book))return;
+      openModal('Rename Song Book',
+        '<div class="form-group" style="padding:0;border:none;"><label class="form-label">Song Book Name *</label><input id="rename-book-name" class="form-input" value="'+esc(book.name)+'"></div>',
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="confirmRenameBook(\''+bookId+'\')">Save</button>',
+        'tag');
+    }
+    function confirmRenameBook(bookId){
+      var book=findBook(bookId);if(!book||!isUserBook(book))return;
+      var name=document.getElementById('rename-book-name').value.trim();
+      if(!name){toast('Song Book name is required');return;}
+      book.name=name;
+      persistAndSync();closeModal();toast('Renamed ✓');renderSongsPage();
+    }
+    function openDeleteBookModal(bookId){
+      var book=findBook(bookId);if(!book||!isUserBook(book))return;
+      openModal('Delete Song Book',
+        '<p style="color:var(--text);">Delete <strong>'+esc(book.name)+'</strong> and all '+book.songs.length+' song(s) in it? This cannot be undone.</p>',
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="confirmDeleteBook(\''+bookId+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete</button>','warning');
+    }
+    function confirmDeleteBook(bookId){
+      var book=findBook(bookId);if(!book||!isUserBook(book))return;
+      var songIds=book.songs.map(function(s){return s.songId;});
+      state.books=state.books.filter(function(b){return b.id!==bookId;});
+      state.favourites=state.favourites.filter(function(id){return songIds.indexOf(id)<0;});
+      state.recentSongs=state.recentSongs.filter(function(id){return songIds.indexOf(id)<0;});
+      if(state.currentBookId===bookId)state.currentBookId=null;
+      saveState();persistAndSync();closeModal();toast('Song Book deleted');renderSongsPage();
+    }
+
+    // ============================================================
+    // SONG CRUD (book-scoped) — modal form; user books only
+    // ============================================================
+    function addSongFormHtml(song){
+      return ''+
+        '<div class="form-group" style="padding:0 0 12px;border:none;"><label class="form-label">Song Number *</label><input id="f-num" class="form-input" type="number" inputmode="numeric" placeholder="'+esc(t('songNumberPh'))+'" value="'+(song?song.songNumber:'')+'" onfocus="castingKeyboardWarn()" onclick="castingKeyboardWarn()"></div>'+
+        '<div class="form-group" style="padding:0 0 12px;border:none;"><label class="form-label">Song Title *</label><input id="f-title" class="form-input" type="text" placeholder="'+esc(t('songTitlePh'))+'" value="'+(song?esc(song.title):'')+'" onfocus="castingKeyboardWarn()" onclick="castingKeyboardWarn()"></div>'+
+        '<div class="form-group" style="padding:0;border:none;"><label class="form-label">Lyrics *</label><textarea id="f-lyrics" class="form-input" rows="10" placeholder="'+esc(t('lyricsPh'))+'" onfocus="castingKeyboardWarn()" onclick="castingKeyboardWarn()">'+(song?esc(song.lyrics):'')+'</textarea></div>';
+    }
+    function openAddSongModal(){
+      var book=findBook(state.currentBookId);
+      if(!book||!isUserBook(book)){toast('Open one of your own Song Books to add a song');return;}
+      state.editingSongId=null;
+      openModal('Add Song',addSongFormHtml(null),
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="confirmSaveSong()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="20 6 9 17 4 12"/></svg> Save</button>',
+        'music');
+    }
+    function openEditSongModal(songId){
+      var found=findSongEverywhere(songId);
+      if(!found||!isUserBook(found.book)){toast('Songs in this Song Book cannot be edited');return;}
+      state.currentBookId=found.book.id;
+      state.editingSongId=songId;
+      openModal('Edit Song',addSongFormHtml(found.song),
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="confirmSaveSong()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="20 6 9 17 4 12"/></svg> Save</button>',
+        'music');
+    }
+    function confirmSaveSong(){
+      var book=findBook(state.currentBookId);
+      if(!book||!isUserBook(book)){toast('This Song Book is read-only');return;}
+      var num=parseInt(document.getElementById('f-num').value);
+      var title=document.getElementById('f-title').value.trim();
+      var lyrics=cleanLyrics(document.getElementById('f-lyrics').value);
+      if(!num||!title||!lyrics){toast('Song number, title and lyrics are required');return;}
+      if(state.editingSongId){
+        var s=book.songs.find(function(x){return x.songId===state.editingSongId;});
+        if(!s){toast('Song not found');return;}
+        if(book.songs.some(function(x){return x.songNumber===num&&x.songId!==s.songId;})){toast('Song #'+num+' already exists in this book');return;}
+        s.songNumber=num;s.title=title;s.lyrics=lyrics;
+        toast('Updated ✓');
+      }else{
+        if(book.songs.some(function(x){return x.songNumber===num;})){toast('Song #'+num+' already exists in this book');return;}
+        book.songs.push({songId:genId('song'),songNumber:num,title:title,lyrics:lyrics});
+        toast('Song added ✓');
+      }
+      var wasEditingFromDetail=!!state.editingSongId&&document.getElementById('page-song-detail').classList.contains('active');
+      state.editingSongId=null;
+      persistAndSync();closeModal();
+      if(wasEditingFromDetail)renderSongDetailContent();else renderSongsPage();
+    }
+    function openDeleteSongModal(songId){
+      var found=findSongEverywhere(songId);
+      if(!found||!isUserBook(found.book)){toast('Songs in this Song Book cannot be deleted');return;}
+      openModal('Delete Song','<p style="color:var(--text);">This song will be permanently deleted.</p>',
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="confirmDeleteSong(\''+songId+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete</button>','warning');
+    }
+    function confirmDeleteSong(songId){
+      var found=findSongEverywhere(songId);
+      if(!found||!isUserBook(found.book))return;
+      found.book.songs=found.book.songs.filter(function(s){return s.songId!==songId;});
+      state.favourites=state.favourites.filter(function(id){return id!==songId;});
+      state.recentSongs=state.recentSongs.filter(function(id){return id!==songId;});
+      saveState();persistAndSync();closeModal();toast('Deleted');
+      closeSongDetail();
+    }
+
+    // ============================================================
+    // EXPORT / IMPORT — Export only ever lists/reads user-created Song Books
+    // (source==='user'); imported/API books can never be exported or overwritten.
+    // ============================================================
+    function sanitizeFilename(name){
+      var safe=(name||'songbook').replace(/[\\/:*?"<>|]+/g,'_').replace(/\s+/g,' ').trim();
+      return safe||'songbook';
+    }
+    var EXPORT_SUBFOLDER='Exported Songs';
+    // The app's real display name — read from the native shell when available (its
+    // installed label) so the shown/exported path is never a hardcoded guess.
+    function getAppDisplayName(){
+      try{
+        if(window.Android&&typeof window.Android.getAppDisplayName==='function'){
+          var n=window.Android.getAppDisplayName();
+          if(n)return n;
+        }
+      }catch(e){}
+      return document.title||'App';
+    }
+    function hasNativeExport(){return !!(window.Android&&typeof window.Android.saveExportFile==='function');}
+    function exportLocationNote(){
+      if(hasNativeExport())return '';
+      if(window.showDirectoryPicker)return 'Your browser may ask you to choose the folder the first time.';
+      return "Your browser can't create this exact folder — files will be saved to your browser's default Downloads location instead.";
+    }
+    function openExportDialog(){
+      var userBooks=state.books.filter(function(b){return b.source==='user';});
+      if(!userBooks.length){toast('You have no Song Books to export yet');return;}
+      var appName=getAppDisplayName();
+      var note=exportLocationNote();
+      var rows=userBooks.map(function(b){
+        return '<label style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;">'+
+          '<input type="checkbox" class="export-book-cb" value="'+b.id+'" style="width:18px;height:18px;accent-color:var(--accent);flex-shrink:0;">'+
+          '<span style="flex:1;min-width:0;overflow-wrap:anywhere;color:var(--text);font-size:14px;">'+esc(b.name)+'</span>'+
+          '<span style="font-size:11px;color:var(--text2);flex-shrink:0;">'+b.songs.length+' songs</span>'+
+        '</label>';
+      }).join('');
+      openModal('Export Song Books',
+        '<div style="padding:10px 12px;margin-bottom:12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;">'+
+          '<div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Export location</div>'+
+          '<div style="font-size:13px;color:var(--text);font-weight:600;">Downloads / '+esc(appName)+' / '+EXPORT_SUBFOLDER+'</div>'+
+          (note?'<div style="font-size:11px;color:var(--text2);margin-top:6px;">'+esc(note)+'</div>':'')+
+        '</div>'+
+        '<div style="max-height:44vh;overflow-y:auto;">'+rows+'</div>',
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="confirmExportBooks()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Export</button>',
+        'upload');
+    }
+    // Resolves once per session — the user only has to pick a folder once via the
+    // File System Access API; subsequent exports reuse the same directory handle.
+    var fsaExportDirHandle=null;
+    async function getFsaExportDir(appName){
+      if(fsaExportDirHandle)return fsaExportDirHandle;
+      var root=await window.showDirectoryPicker({id:'exported-songs',startIn:'downloads'});
+      var appDir=await root.getDirectoryHandle(sanitizeFilename(appName),{create:true});
+      fsaExportDirHandle=await appDir.getDirectoryHandle(EXPORT_SUBFOLDER,{create:true});
+      return fsaExportDirHandle;
+    }
+    // Saves one Song Book JSON file, trying the most reliable method this environment
+    // actually supports, and returns {ok,reason} reflecting what really happened —
+    // never a blind "it worked".
+    async function saveExportedFile(appName,fileName,json){
+      if(hasNativeExport()){
+        try{
+          var raw=window.Android.saveExportFile(appName,EXPORT_SUBFOLDER,fileName,json);
+          var parsed=JSON.parse(raw);
+          return parsed;
+        }catch(e){return{ok:false,reason:'App could not save the file'};}
+      }
+      if(window.showDirectoryPicker){
+        try{
+          var dir=await getFsaExportDir(appName);
+          var fh=await dir.getFileHandle(fileName,{create:true});
+          var w=await fh.createWritable();
+          await w.write(json);
+          await w.close();
+          return{ok:true};
+        }catch(e){
+          return{ok:false,reason:'Folder access was not granted'};
+        }
+      }
+      try{
+        var blob=new Blob([json],{type:'application/json'});
+        var url=URL.createObjectURL(blob);
+        var a=document.createElement('a');a.href=url;a.download=fileName;
+        document.body.appendChild(a);a.click();document.body.removeChild(a);
+        setTimeout(function(){URL.revokeObjectURL(url);},4000);
+        return{ok:true,reason:"saved to your browser's default Downloads folder"};
+      }catch(e){
+        return{ok:false,reason:'Your browser blocked the download'};
+      }
+    }
+    async function confirmExportBooks(){
+      var ids=Array.prototype.map.call(document.querySelectorAll('.export-book-cb:checked'),function(c){return c.value;});
+      if(!ids.length){toast('Select at least one Song Book');return;}
+      var books=ids.map(findBook).filter(function(b){return b&&b.source==='user';});
+      closeModal();
+      var appName=getAppDisplayName();
+      var okCount=0,failCount=0,partialNote='';
+      for(var i=0;i<books.length;i++){
+        var b=books[i];
+        var json=JSON.stringify({name:b.name,songs:b.songs},null,2);
+        var fileName=sanitizeFilename(b.name)+'.json';
+        var result=await saveExportedFile(appName,fileName,json);
+        if(result&&result.ok){okCount++;if(result.reason)partialNote=result.reason;}
+        else{failCount++;}
+      }
+      if(okCount&&!failCount){
+        toast(partialNote?('Export completed — '+partialNote+'.'):'Export completed successfully.');
+      }else if(okCount&&failCount){
+        toast('Exported '+okCount+' of '+books.length+' — some Song Books failed. Please try again.');
+      }else{
+        toast('Export failed. Please try again.');
+      }
+    }
+
+    function openImportDialog(){
+      openModal('Import Songs Book',
+        '<div class="form-group" style="padding:0;border:none;">'+
+          '<label class="form-label">JSON File *</label>'+
+          '<input id="import-book-file" type="file" accept=".json,application/json" class="form-input" style="padding:8px;">'+
+          '<p style="font-size:11px;color:var(--text2);margin-top:8px;">The file must contain a Song Book "name" and a "songs" array — the same format produced by Export.</p>'+
+        '</div>',
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="confirmImportBook()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Import</button>',
+        'download');
+    }
+    // Strict schema check per the new Song Book import format — never repaired/converted
+    // from an older shape; anything that doesn't match exactly is rejected outright.
+    var IMPORT_SONG_KEYS=['songId','songNumber','title','lyrics'];
+    function validateSongBookJson(parsed){
+      if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))return{ok:false};
+      if(typeof parsed.name!=='string'||!parsed.name.trim())return{ok:false};
+      if(!Array.isArray(parsed.songs))return{ok:false};
+      var songs=[];
+      for(var i=0;i<parsed.songs.length;i++){
+        var s=parsed.songs[i];
+        if(!s||typeof s!=='object'||Array.isArray(s))return{ok:false};
+        var keys=Object.keys(s);
+        for(var k=0;k<keys.length;k++){if(IMPORT_SONG_KEYS.indexOf(keys[k])===-1)return{ok:false};}
+        if(typeof s.songId!=='string'||!s.songId.trim())return{ok:false};
+        if(typeof s.songNumber!=='number'||!isFinite(s.songNumber)||!s.songNumber)return{ok:false};
+        if(typeof s.title!=='string'||!s.title.trim())return{ok:false};
+        if(typeof s.lyrics!=='string'||!s.lyrics.trim())return{ok:false};
+        songs.push({songId:s.songId.trim(),songNumber:s.songNumber,title:s.title.trim(),lyrics:cleanLyrics(s.lyrics)});
+      }
+      return{ok:true,name:parsed.name.trim(),songs:songs};
+    }
+    function showImportFormatError(){
+      var example='{\n  "name": "Song Book Name",\n  "songs": [\n    {\n      "songId": "sample1",\n      "songNumber": 1,\n      "title": "Song Title",\n      "lyrics": "Song lyrics"\n    }\n  ]\n}';
+      openModal('Import Failed',
+        '<p style="color:var(--text);margin-bottom:10px;">This file cannot be imported because it does not match the required Song Book format.</p>'+
+        '<p style="font-size:12px;color:var(--text2);margin-bottom:6px;">Required format:</p>'+
+        '<pre style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11px;color:var(--text);overflow-x:auto;white-space:pre-wrap;word-break:break-word;">'+esc(example)+'</pre>'+
+        '<p style="color:var(--text);margin-top:10px;font-size:13px;">Please select a valid Song Book JSON file.</p>',
+        '<button class="btn btn-primary" onclick="closeModal()">OK</button>',
+        'warning');
+    }
+    function confirmImportBook(){
+      var fileInput=document.getElementById('import-book-file');
+      var file=fileInput&&fileInput.files&&fileInput.files[0];
+      if(!file){toast('Please choose a JSON file');return;}
+      var reader=new FileReader();
+      reader.onload=function(){
+        var parsed;
+        try{parsed=JSON.parse(String(reader.result));}catch(e){showImportFormatError();return;}
+        var result=validateSongBookJson(parsed);
+        if(!result.ok){showImportFormatError();return;}
+        // Only created once validation fully passes — never a partial/invalid book,
+        // and this can never touch/overwrite an existing (user or imported) Song Book.
+        var usedIds={};
+        result.songs.forEach(function(s){
+          if(usedIds[s.songId])s.songId=genId('song');
+          usedIds[s.songId]=true;
+        });
+        state.books.push({id:genId('user'),name:result.name,source:'user',songs:result.songs});
+        persistAndSync();closeModal();toast('Imported "'+result.name+'" ['+result.songs.length+' song(s)] ✓');renderSongsPage();
+      };
+      reader.onerror=function(){toast('Could not read the selected file');};
+      reader.readAsText(file);
+    }
+    function clearAllSongs(){openModal('Clear All My Songs','<p style="color:var(--text);margin-bottom:10px;">Type <strong>DELETE</strong> to permanently remove all of your own Song Books. Imported Song Books are not affected.</p><input id="clear-confirm" class="form-input" placeholder="DELETE">','<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="confirmClearAll()">Clear All</button>','warning');}
+    function confirmClearAll(){
+      if(document.getElementById('clear-confirm').value!=='DELETE'){toast('Type DELETE to confirm');return;}
+      var userSongIds=[];
+      state.books.filter(function(b){return b.source==='user';}).forEach(function(b){b.songs.forEach(function(s){userSongIds.push(s.songId);});});
+      state.books=state.books.filter(function(b){return b.source!=='user';});
+      state.favourites=state.favourites.filter(function(id){return userSongIds.indexOf(id)<0;});
+      state.recentSongs=state.recentSongs.filter(function(id){return userSongIds.indexOf(id)<0;});
+      if(state.currentBookId&&!findBook(state.currentBookId))state.currentBookId=null;
+      saveState();persistAndSync();closeModal();toast('All your Song Books cleared');renderSongsPage();
+    }
+
+    // ============================================================
+    // BIBLE SETUP
+    // ============================================================
+    var bibleBookSel=document.getElementById('bible-book');
+    var bibleChSel=document.getElementById('bible-chapter');
+    var bibleVerSel=document.getElementById('bible-version');
+    VERSIONS.forEach(function(v){var o=document.createElement('option');o.value=v.v;o.textContent=v.label;if(v.v==='KJV')o.selected=true;bibleVerSel.appendChild(o);});
+    BIBLE_BOOKS.forEach(function(b,i){var o=document.createElement('option');o.value=i+1;o.textContent=b.n;bibleBookSel.appendChild(o);});
+    bibleBookSel.value=43;
+    fillBibleChapters(bibleBookSel,bibleChSel,43);
+    bibleChSel.value=3;
+    bibleBookSel.addEventListener('change',function(){fillBibleChapters(bibleBookSel,bibleChSel,parseInt(this.value));});
+
+    function fillBibleChapters(bookSel,chSel,bookNum){
+      var book=BIBLE_BOOKS[bookNum-1];chSel.innerHTML='';
+      for(var i=1;i<=book.ch;i++){var o=document.createElement('option');o.value=i;o.textContent=i;chSel.appendChild(o);}
+    }
+
+    function stripStrongs(text){return text.replace(/<S>[^<]*<\/S>/gi,'').replace(/<f>.*?<\/f>/gi,'').replace(/<[^>]+>/g,'').replace(/\b\d{3,5}\b/g,'').replace(/\s{2,}/g,' ').trim();}
+
+    // Font size now lives on the --font-size CSS var (persisted in state/localStorage)
+    // instead of per-element inline styles, so it survives re-renders (e.g. a verse tap)
+    // instead of resetting back to the 16px default.
+    function setBibleFontSize(val){
+      val=Math.round(Math.min(36,Math.max(12,val)));
+      state.bibleFontSize=val;
+      save('bibleFontSize',val);
+      document.documentElement.style.setProperty('--font-size',val+'px');
+    }
+
+    function bibleLoad(){
+      state.bibleVersion=bibleVerSel.value;state.bibleBook=parseInt(bibleBookSel.value);state.bibleChapter=parseInt(bibleChSel.value);
+      loadBibleChapter(state.bibleVersion,state.bibleBook,state.bibleChapter,function(verses){state.bibleVerses=verses;renderBibleContent();});
+    }
+
+    function getBibleKey(ver,book,ch){return'bible_'+ver+'_'+book+'_'+ch;}
+
+    function loadBibleChapter(ver,book,ch,cb){
+      var key=getBibleKey(ver,book,ch);var cached=load(key,null);
+      if(cached){cb(cached);return;}
+      var url='https://bolls.life/get-text/'+ver+'/'+book+'/'+ch+'/';
+      fetch(url).then(function(r){return r.json();}).then(function(data){
+        var verses=data.map(function(v){return{n:v.verse,t:stripStrongs(v.text)};});
+        save(key,verses);cb(verses);
+      }).catch(function(){toast('Could not load chapter. Check internet.');cb([]);});
+    }
+
+    function renderBibleContent(){
+      var view=state.bibleView;var verses=state.bibleVerses;
+      var isTamil=TAMIL_VERSIONS.indexOf(state.bibleVersion)>-1;
+      var bookName=isTamil?TAMIL_BOOKS[state.bibleBook-1]:BIBLE_BOOKS[state.bibleBook-1].n;
+      var header='<div style="padding:8px 14px;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;">'+
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;color:var(--accent);"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>'+
+        bookName+' '+state.bibleChapter+' — '+state.bibleVersion+'</div>';
+
+      if(view==='single'){
+        document.getElementById('bible-single').innerHTML=header+verses.map(function(v){
+          return'<div class="verse-row" id="bv'+v.n+'" onclick="tapBibleVerse('+v.n+')">'+'<div class="verse-num">'+v.n+'</div><div class="verse-text">'+v.t+'</div>'+'</div>';
+        }).join('');
+      } else if(view==='split'){
+        function panelBar(side){
+          var bk=side==='L'?state.splitBookLeft:state.splitBookRight;
+          var ch=side==='L'?state.splitChLeft:state.splitChRight;
+          var ver=side==='L'?state.splitVerLeft:state.splitVerRight;
+          var verLabel=(VERSIONS.find(function(v){return v.v===ver;})||{label:ver}).label;
+          var isTamilSide=TAMIL_VERSIONS.indexOf(ver)>-1;
+          var bkLabel=BIBLE_BOOKS[bk-1]?(isTamilSide?TAMIL_BOOKS[bk-1]:BIBLE_BOOKS[bk-1].n):bk;
+          var chs=BIBLE_BOOKS[bk-1]?BIBLE_BOOKS[bk-1].ch:1;
+          var verItems=VERSIONS.map(function(v){return'<div class="split-dropdown-item'+(ver===v.v?' active':'')+'" onclick="onSplitChange(\'ver\',\''+side+'\',\''+v.v+'\');closeSplitDropdowns();">'+v.label+'</div>';}).join('');
+          var bkItems=BIBLE_BOOKS.map(function(b,i){return'<div class="split-dropdown-item'+(bk===(i+1)?' active':'')+'" onclick="onSplitChange(\'book\',\''+side+'\','+(i+1)+');closeSplitDropdowns();">'+(isTamilSide?TAMIL_BOOKS[i]:b.n)+'</div>';}).join('');
+          var chItems='';for(var i=1;i<=chs;i++){chItems+='<div class="split-dropdown-item'+(ch===i?' active':'')+'" onclick="onSplitChange(\'ch\',\''+side+'\','+i+');closeSplitDropdowns();">'+i+'</div>';}
+          var arr='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>';
+          return'<div class="split-panel-bar">'+
+            '<div class="split-panel-row">'+
+              '<div class="split-picker" id="sp-ver-'+side+'">'+
+                '<div class="split-picker-btn" onclick="toggleSplitDropdown(\'sp-ver-'+side+'\')"><span>'+verLabel+'</span>'+arr+'</div>'+
+                '<div class="split-dropdown" style="display:none;"><div class="split-dropdown-inner">'+verItems+'</div></div>'+
+              '</div>'+
+            '</div>'+
+            '<div class="split-panel-row">'+
+              '<div class="split-picker" id="sp-bk-'+side+'" style="flex:2;">'+
+                '<div class="split-picker-btn" onclick="toggleSplitDropdown(\'sp-bk-'+side+'\')"><span>'+bkLabel+'</span>'+arr+'</div>'+
+                '<div class="split-dropdown" style="display:none;"><div class="split-dropdown-inner">'+bkItems+'</div></div>'+
+              '</div>'+
+              '<div class="split-picker" id="sp-ch-'+side+'" style="flex:1;">'+
+                '<div class="split-picker-btn" onclick="toggleSplitDropdown(\'sp-ch-'+side+'\')"><span>'+ch+'</span>'+arr+'</div>'+
+                '<div class="split-dropdown" style="display:none;"><div class="split-dropdown-inner">'+chItems+'</div></div>'+
+              '</div>'+
+            '</div>'+
+          '</div>';
+        }
+        loadBibleChapter(state.splitVerLeft,state.splitBookLeft,state.splitChLeft,function(leftVerses){
+          loadBibleChapter(state.splitVerRight,state.splitBookRight,state.splitChRight,function(rightVerses){
+            document.getElementById('bible-split').innerHTML=
+              '<div class="split-cols">'+
+              '<div class="split-col">'+panelBar('L')+'<div class="split-col-scroll">'+
+              leftVerses.map(function(v){return'<div class="verse-row"><div class="verse-num">'+v.n+'</div><div class="verse-text">'+v.t+'</div></div>';}).join('')+
+              '</div></div>'+
+              '<div class="split-col">'+panelBar('R')+'<div class="split-col-scroll">'+
+              rightVerses.map(function(v){return'<div class="verse-row"><div class="verse-num">'+v.n+'</div><div class="verse-text">'+v.t+'</div></div>';}).join('')+
+              '</div></div>'+
+              '</div>';
+          });
+        });
+      }
+    }
+
+    function onSplitChange(type,side,val){
+      if(type==='ver'){if(side==='L')state.splitVerLeft=val;else state.splitVerRight=val;}
+      else if(type==='book'){
+        if(side==='L'){state.splitBookLeft=val;state.splitChLeft=1;}
+        else{state.splitBookRight=val;state.splitChRight=1;}
+      }
+      else if(type==='ch'){if(side==='L')state.splitChLeft=val;else state.splitChRight=val;}
+      renderBibleContent();
+    }
+
+    function toggleSplitDropdown(id){
+    var el=document.getElementById(id);if(!el)return;
+    var dd=el.querySelector('.split-dropdown');
+    var isOpen=dd.style.display==='block';
+    closeSplitDropdowns();
+    if(!isOpen)dd.style.display='block';
+  }
+  function closeSplitDropdowns(){
+    document.querySelectorAll('.split-dropdown').forEach(function(d){d.style.display='none';});
+  }
+  document.addEventListener('click',function(e){
+    if(!e.target.closest('.split-picker'))closeSplitDropdowns();
+  });
+
+    function switchBibleView(view,el){
+      state.bibleView=view;
+      document.querySelectorAll('#bible-view-tabs .tab').forEach(function(t){t.classList.remove('active');});
+      if(el)el.classList.add('active');
+      var showSelectors=view==='single';
+      var hs=document.getElementById('bible-header-selectors');
+      if(hs)hs.style.display=showSelectors?'flex':'none';
+      var ids=['bible-single','bible-search','bible-split'];
+      ids.forEach(function(id){
+        var e2=document.getElementById(id);if(!e2)return;
+        e2.style.display='none';e2.style.flex='';e2.style.overflow='';
+      });
+      var map={single:'bible-single',search:'bible-search',split:'bible-split'};
+      var active=document.getElementById(map[view]);
+      if(active){
+        if(view==='split'){active.style.display='flex';active.style.flex='1';}
+        else{active.style.display='block';}
+        if(view==='search')runBibleSearch();else renderBibleContent();
+      }
+    }
+
+    function scrollToVerse(n){
+      var el=document.getElementById('bv'+n);
+      if(el){el.classList.add('highlight');el.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(function(){el.classList.remove('highlight');},3000);}
+    }
+
+    // Tapping a verse only ever re-renders (for future selection/highlight use); it must
+    // never touch font size — size now lives purely in the persisted --font-size CSS var.
+    function tapBibleVerse(n){state.presentingVerseN=n;renderBibleContent();}
+
+    // ============================================================
+    // BIBLE WORD SEARCH (Search tab) — reuses the same BIBLE_BOOKS/TAMIL_BOOKS/VERSIONS
+    // data and the cached "bible_<ver>_<book>_<ch>" chapters already used by Single/Split,
+    // so no separate Bible dataset is ever duplicated for this tab.
+    // ============================================================
+    function escRe(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+    var bibleSearchDebounceTimer=null;
+    function onBibleWordSearchInput(){
+      clearTimeout(bibleSearchDebounceTimer);
+      bibleSearchDebounceTimer=setTimeout(runBibleSearch,200);
+    }
+    function collectBibleMatches(ql,scope){
+      var out=[];
+      scope.forEach(function(entry){
+        (entry.verses||[]).forEach(function(v){
+          if(v.t&&v.t.toLowerCase().indexOf(ql)>-1)out.push({ver:entry.ver,bookN:entry.bookN,ch:entry.ch,vn:v.n,text:v.t});
+        });
+      });
+      return out;
+    }
+    function runBibleSearch(){
+      var resultsEl=document.getElementById('bible-search-results');
+      if(!resultsEl)return;
+      var qRaw=(document.getElementById('bible-word-search').value||'').trim().replace(/\s+/g,' ');
+      if(!qRaw||qRaw.length<2){resultsEl.innerHTML=emptyStateHtml('Type at least 2 characters to search');return;}
+      var ql=qRaw.toLowerCase();
+      var ver=state.searchVersion,bk=state.searchBook,ch=state.searchChapter;
+
+      if(ver&&bk&&ch){
+        loadBibleChapter(ver,bk,ch,function(verses){
+          renderBibleSearchResults(collectBibleMatches(ql,[{ver:ver,bookN:bk,ch:ch,verses:verses}]),qRaw);
+        });
+        return;
+      }
+
+      var scope=[];
+      for(var i=0;i<localStorage.length;i++){
+        var key=localStorage.key(i);if(!key||key.indexOf('bible_')!==0)continue;
+        var parts=key.split('_');if(parts.length<4)continue;
+        var kVer=parts[1],kBook=parseInt(parts[2]),kCh=parseInt(parts[3]);
+        if(isNaN(kBook)||isNaN(kCh))continue;
+        if(ver&&kVer!==ver)continue;
+        if(bk&&kBook!==bk)continue;
+        if(ch&&kCh!==ch)continue;
+        var verses=load(key,null);if(!verses)continue;
+        scope.push({ver:kVer,bookN:kBook,ch:kCh,verses:verses});
+      }
+      renderBibleSearchResults(collectBibleMatches(ql,scope),qRaw);
+      if(!scope.length){
+        resultsEl.innerHTML=emptyStateHtml('No downloaded Bible text to search yet — pick a specific Version, Book & Chapter above, or download a version in Settings.');
+      }
+    }
+    function renderBibleSearchResults(matches,q){
+      var el=document.getElementById('bible-search-results');
+      if(!matches.length){el.innerHTML=emptyStateHtml('No verses found');return;}
+      var re=new RegExp('('+escRe(q)+')','gi');
+      var groups={};
+      matches.forEach(function(m){
+        groups[m.ver]=groups[m.ver]||{};
+        groups[m.ver][m.bookN]=groups[m.ver][m.bookN]||{};
+        groups[m.ver][m.bookN][m.ch]=groups[m.ver][m.bookN][m.ch]||[];
+        groups[m.ver][m.bookN][m.ch].push(m);
+      });
+      var html='';
+      Object.keys(groups).forEach(function(ver){
+        var isTamilV=TAMIL_VERSIONS.indexOf(ver)>-1;
+        html+='<div class="book-group-header">'+ver+'</div>';
+        var byBook=groups[ver];
+        Object.keys(byBook).map(Number).sort(function(a,b){return a-b;}).forEach(function(bookN){
+          var bookName=isTamilV?TAMIL_BOOKS[bookN-1]:(BIBLE_BOOKS[bookN-1]?BIBLE_BOOKS[bookN-1].n:bookN);
+          var byCh=byBook[bookN];
+          Object.keys(byCh).map(Number).sort(function(a,b){return a-b;}).forEach(function(chN){
+            html+='<div style="padding:8px 14px 2px;font-size:12px;color:var(--text2);"><strong style="color:var(--text);">'+esc(bookName)+'</strong> &middot; Chapter '+chN+'</div>';
+            byCh[chN].sort(function(a,b){return a.vn-b.vn;}).forEach(function(m){
+              var hi=m.text.replace(re,'<mark style="background:var(--accent2);color:#fff;padding:1px 3px;border-radius:3px;">$1</mark>');
+              html+='<div class="verse-row" onclick="jumpToBibleResult('+bookN+','+chN+','+m.vn+',\''+ver+'\')"><div class="verse-num">'+m.vn+'</div><div class="verse-text">'+hi+'</div></div>';
+            });
+          });
+        });
+      });
+      el.innerHTML=html;
+    }
+    function jumpToBibleResult(bookN,ch,vn,ver){
+      state.bibleBook=bookN;state.bibleChapter=ch;state.bibleVersion=ver;
+      bibleVerSel.value=ver;bibleBookSel.value=bookN;fillBibleChapters(bibleBookSel,bibleChSel,bookN);bibleChSel.value=ch;
+      updateBiblePillLabels();
+      switchBibleView('single',document.querySelector('#bible-view-tabs [data-tab="single"]'));
+      loadBibleChapter(ver,bookN,ch,function(verses){state.bibleVerses=verses;renderBibleContent();setTimeout(function(){scrollToVerse(vn);},300);});
+    }
+
+    // Kept for the native JS-bridge contract (Android may evaluate this by name);
+    // Song Books themselves are not part of this sync — only favourites are.
+    function receiveDataSync(jsonStr){
+      try{var data=JSON.parse(jsonStr);if(data.favourites){state.favourites=data.favourites;saveState();renderSongsPage();}}catch(e){}
+    }
+
+    function openCastController(){
+      if(window.Android){window.Android.openController();window.Android.syncTheme(state.theme);}
+    }
+
+    // ============================================================
+    // MODAL
+    // ============================================================
+    var MODAL_ICONS={
+      music:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
+      book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+      warning:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+      tag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/></svg>',
+      upload:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/></svg>',
+      download:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/></svg>',
+      settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg>'
+    };
+    function openModal(title,body,footer,iconKey){
+      document.getElementById('modal-title').textContent=title;document.getElementById('modal-body').innerHTML=body;document.getElementById('modal-footer').innerHTML=footer||'';
+      var iconEl=document.getElementById('modal-icon-el');iconEl.innerHTML=MODAL_ICONS[iconKey||'settings']||MODAL_ICONS.settings;
+      document.getElementById('modal-overlay').classList.add('open');
+    }
+    function closeModal(){document.getElementById('modal-overlay').classList.remove('open');}
+    document.getElementById('modal-overlay').addEventListener('click',function(e){if(e.target===this)closeModal();});
+
+    // ============================================================
+    // SWIPE TABS (songs page)
+    // ============================================================
+    var songPageEl=document.getElementById('page-songs');
+    var swipeStartX=0;
+    songPageEl.addEventListener('touchstart',function(e){swipeStartX=e.touches[0].clientX;},{passive:true});
+    songPageEl.addEventListener('touchend',function(e){
+      var dx=e.changedTouches[0].clientX-swipeStartX;
+      if(Math.abs(dx)>70){var tabs=['all','fav','recent'],cur=tabs.indexOf(state.songsTab);var next=dx<0?cur+1:cur-1;if(next>=0&&next<tabs.length){var el=document.querySelector('#songs-tabs [data-tab="'+tabs[next]+'"]');if(el)switchSongsTab(tabs[next],el);}}
+    },{passive:true});
+
+    // ============================================================
+    // BIBLE PICKER
+    // ============================================================
+    var biblePicker={mode:'',target:'main',items:[],currentItems:[]};
+    // Single tab and the Search tab's filters both drive this same full-screen picker;
+    // this just resolves "what's currently selected" for whichever one opened it.
+    function pickerCurrentValue(kind){
+      if(biblePicker.target==='search'){
+        if(kind==='version')return state.searchVersion;
+        if(kind==='book')return state.searchBook;
+        return state.searchChapter;
+      }
+      if(kind==='version')return state.bibleVersion;
+      if(kind==='book')return state.bibleBook;
+      return state.bibleChapter;
+    }
+    function openBiblePicker(mode,target){
+      biblePicker.mode=mode;
+      biblePicker.target=target||'main';
+      var allowAll=biblePicker.target==='search';
+      var overlay=document.getElementById('bible-picker-overlay');
+      var searchRow=document.getElementById('bible-picker-search-row');
+      var searchInput=document.getElementById('bible-picker-search');
+      searchInput.value='';
+      if(mode==='version'){
+        document.getElementById('bible-picker-title').textContent='Bible Version';searchRow.style.display='none';
+        biblePicker.items=(allowAll?[{value:'',label:'All Versions'}]:[]).concat(VERSIONS.map(function(v){return{value:v.v,label:v.label};}));
+      } else if(mode==='book'){
+        document.getElementById('bible-picker-title').textContent='Select Book';searchRow.style.display='block';
+        biblePicker.items=(allowAll?[{value:'',label:'All Books'}]:[]).concat(BIBLE_BOOKS.map(function(b,i){return{value:i+1,label:b.n,num:i+1};}));
+      } else if(mode==='chapter'){
+        document.getElementById('bible-picker-title').textContent='Select Chapter';searchRow.style.display='none';
+        var bookForCh=allowAll?state.searchBook:state.bibleBook;
+        if(allowAll&&!bookForCh){biblePicker.items=[{value:'',label:'All Chapters'}];}
+        else{
+          var book=BIBLE_BOOKS[bookForCh-1];
+          biblePicker.items=allowAll?[{value:'',label:'All Chapters'}]:[];
+          for(var i=1;i<=book.ch;i++)biblePicker.items.push({value:i,label:'Chapter '+i,num:i});
+        }
+      }
+      renderBiblePickerItems(biblePicker.items);
+      overlay.style.display='flex';overlay.style.flexDirection='column';
+    }
+    function renderBiblePickerItems(items){
+      var curVerForLang=biblePicker.target==='search'?(state.searchVersion||'KJV'):state.bibleVersion;
+      var isTamil=TAMIL_VERSIONS.indexOf(curVerForLang)>-1;
+      var listEl=document.getElementById('bible-picker-list');
+        
+      // ==========================
+      // VERSION PICKER (2 columns)
+      // ==========================
+      if(biblePicker.mode==='version'){
+
+        listEl.classList.remove('testament-split');
+        listEl.style.display='grid';
+        listEl.style.gridTemplateColumns='1fr 1fr';
+        listEl.style.gap='8px';
+        listEl.style.padding='12px';
+      
+        listEl.innerHTML=items.map(function(item,idx){
+
+          var isSelected=item.value===pickerCurrentValue('version');
+
+          return `
+            <div data-picker-idx="${idx}"
+                 style="
+                    height:56px;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    border:1px solid var(--border);
+                    border-radius:10px;
+                    cursor:pointer;
+                    background:${isSelected?'var(--accent)':'var(--bg2)'};
+                    color:${isSelected?'#fff':'var(--text)'};
+                    font-size:14px;
+                    font-weight:600;
+                 ">
+              ${esc(item.label)}
+            </div>
+          `;
+        }).join('');
+      }
+    
+      // ==========================================
+      // BOOK PICKER (OT left, NT right)
+      // ==========================================
+      else if(biblePicker.mode==='book'){
+
+        // Old Testament and New Testament are rendered as two independently
+        // scrollable columns (separate scroll containers), not one shared list.
+        listEl.style.display='';
+        listEl.style.padding='';
+        listEl.classList.add('testament-split');
+
+        var allItem=items.find(function(i){return i.value==='';});
+        var realItems=items.filter(function(i){return i.value!=='';});
+        var oldBooks=realItems.filter(function(i){return i.value<=39;});
+        var newBooks=realItems.filter(function(i){return i.value>39;});
+        var curBook=pickerCurrentValue('book');
+
+        function renderTestamentCol(label,bookList){
+          var html='<div style="position:sticky;top:0;padding:15px 10px;text-align:center;font-weight:700;background:var(--bg);border-radius:3px;margin-bottom:10px;z-index:1;">'+label+'</div>';
+          if(allItem&&label==='Old Testament'){
+            var selAll=!curBook;
+            html+='<div data-picker-idx="'+items.indexOf(allItem)+'" style="padding:10px;margin:0 2px 8px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-weight:700;background:'+(selAll?'var(--accent)':'var(--bg2)')+';color:'+(selAll?'var(--bg)':'var(--text)')+';">'+esc(allItem.label)+'</div>';
+          }
+          bookList.forEach(function(book){
+            var selected=book.value===curBook;
+            var bLabel=isTamil?(TAMIL_BOOKS[book.value-1]||book.label):book.label;
+            html+='<div data-picker-idx="'+items.indexOf(book)+'" style="padding:10px;margin:0 2px 8px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:'+(selected?'var(--accent)':'var(--bg2)')+';color:'+(selected?'var(--bg)':'var(--text)')+';">'+esc(bLabel)+'</div>';
+          });
+          return html;
+        }
+
+        listEl.innerHTML=
+          '<div class="testament-col">'+renderTestamentCol('Old Testament',oldBooks)+'</div>'+
+          '<div class="testament-col">'+renderTestamentCol('New Testament',newBooks)+'</div>';
+      }
+    
+      // ==========================
+      // CHAPTER PICKER GRID
+      // ==========================
+      else if(biblePicker.mode==='chapter'){
+
+        listEl.classList.remove('testament-split');
+        listEl.style.display='grid';
+        listEl.style.gridTemplateColumns='repeat(auto-fill,minmax(48px,1fr))';
+        listEl.style.gap='8px';
+        listEl.style.padding='12px';
+      
+        listEl.innerHTML=items.map(function(item,idx){
+
+          var isSelected=item.value===pickerCurrentValue('chapter');
+
+          return `
+            <div data-picker-idx="${idx}"
+                 style="
+                    height:48px;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    border:1px solid var(--border);
+                    border-radius:10px;
+                    cursor:pointer;
+                    background:${isSelected?'var(--accent)':'var(--bg2)'};
+                    color:${isSelected?'#fff':'var(--text)'};
+                    font-size:14px;
+                    font-weight:600;
+                 ">
+              ${item.value===''?'All':item.value}
+            </div>
+          `;
+        }).join('');
+      }
+
+      biblePicker.currentItems=items;
+    
+      listEl.onclick=function(e){
+        var row=e.target.closest('[data-picker-idx]');
+        if(!row)return;
+      
+        var idx=parseInt(row.getAttribute('data-picker-idx'));
+        var item=biblePicker.currentItems[idx];
+      
+        if(item)selectBiblePickerItem(item.value);
+      };
+    }
+    function filterBiblePicker(q){if(!q){renderBiblePickerItems(biblePicker.items);return;}var ql=q.toLowerCase();renderBiblePickerItems(biblePicker.items.filter(function(i){return i.label.toLowerCase().includes(ql);}));}
+    function selectBiblePickerItem(value){
+      if(biblePicker.target==='search'){
+        if(biblePicker.mode==='version'){
+          state.searchVersion=value;
+          document.getElementById('search-ver-label').textContent=value?value:'All Versions';
+        }else if(biblePicker.mode==='book'){
+          state.searchBook=value||'';
+          state.searchChapter='';
+          var isTamilS=TAMIL_VERSIONS.indexOf(state.searchVersion||'KJV')>-1;
+          document.getElementById('search-book-label').textContent=value?(isTamilS?TAMIL_BOOKS[value-1]:BIBLE_BOOKS[value-1].n):'All Books';
+          document.getElementById('search-ch-label').textContent='All';
+        }else if(biblePicker.mode==='chapter'){
+          state.searchChapter=value||'';
+          document.getElementById('search-ch-label').textContent=value?value:'All';
+        }
+        closeBiblePicker();
+        runBibleSearch();
+        return;
+      }
+      if(biblePicker.mode==='version'){state.bibleVersion=value;bibleVerSel.value=value;document.getElementById('bible-ver-label').textContent=value;}
+      else if(biblePicker.mode==='book'){state.bibleBook=value;bibleBookSel.value=value;state.bibleChapter=1;fillBibleChapters(bibleBookSel,bibleChSel,value);bibleChSel.value=1;document.getElementById('bible-ch-label').textContent='1';var isTamil=TAMIL_VERSIONS.indexOf(state.bibleVersion)>-1;document.getElementById('bible-book-label').textContent=isTamil?TAMIL_BOOKS[value-1]:BIBLE_BOOKS[value-1].n;}
+      else if(biblePicker.mode==='chapter'){state.bibleChapter=value;fillBibleChapters(bibleBookSel,bibleChSel,state.bibleBook);bibleChSel.value=value;document.getElementById('bible-ch-label').textContent=value;}
+      closeBiblePicker();
+      bibleLoad();
+    }
+    function closeBiblePicker(){document.getElementById('bible-picker-overlay').style.display='none';}
+    function updateBiblePillLabels(){var isTamil=TAMIL_VERSIONS.indexOf(state.bibleVersion)>-1;document.getElementById('bible-ver-label').textContent=state.bibleVersion;document.getElementById('bible-book-label').textContent=isTamil?TAMIL_BOOKS[state.bibleBook-1]:BIBLE_BOOKS[state.bibleBook-1].n;document.getElementById('bible-ch-label').textContent=state.bibleChapter;}
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+    function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+    // ============================================================
+    // EVENTS
+    // ============================================================
+    document.getElementById('songs-search').addEventListener('input',function(){onSongsSearchChanged();});
+    document.getElementById('songs-num-search').addEventListener('input',function(){onSongsSearchChanged();});
+
+    // ============================================================
+    // BIBLE PINCH-TO-ZOOM — attached once to the stable scroll containers (their
+    // innerHTML is rebuilt on every chapter load, but the containers themselves
+    // persist, so the listeners never need to be re-attached).
+    // ============================================================
+    function pinchDist(touches){var dx=touches[0].clientX-touches[1].clientX,dy=touches[0].clientY-touches[1].clientY;return Math.sqrt(dx*dx+dy*dy);}
+    function attachPinchZoom(el){
+      if(!el)return;
+      var startDist=0,startSize=16,pinching=false;
+      el.addEventListener('touchstart',function(e){
+        if(e.touches.length===2){pinching=true;startDist=pinchDist(e.touches);startSize=state.bibleFontSize;}
+      },{passive:true});
+      el.addEventListener('touchmove',function(e){
+        if(pinching&&e.touches.length===2){
+          e.preventDefault();
+          var scale=pinchDist(e.touches)/startDist;
+          setBibleFontSize(startSize*scale);
+        }
+      },{passive:false});
+      el.addEventListener('touchend',function(e){if(e.touches.length<2)pinching=false;},{passive:true});
+      el.addEventListener('touchcancel',function(){pinching=false;},{passive:true});
+    }
+    attachPinchZoom(document.getElementById('bible-single'));
+    attachPinchZoom(document.getElementById('bible-search'));
+    attachPinchZoom(document.getElementById('bible-split'));
+
+    // ============================================================
+    // INIT
+    // ============================================================
+    function init(){
+      loadState();
+      applyTheme(state.theme);
+
+      var migrated=migrateLegacySongsIfNeeded();
+      var userBooks=loadUserBooks();
+      if(userBooks===null)userBooks=migrated?[migrated]:[];
+      state.books=userBooks;
+      if(migrated)persistAndSync();
+
+      applyLanguage();
+      updateFavFilterBtnStyle();
+      renderSongsPage();
+
+      bibleBookSel.value=43;fillBibleChapters(bibleBookSel,bibleChSel,43);bibleChSel.value=3;bibleVerSel.value='KJV';
+      updateBiblePillLabels();
+      setBibleFontSize(state.bibleFontSize);
+      bibleLoad();
+
+      // Imported (mock/API) Song Books load asynchronously; merge them in once ready.
+      loadImportedBooks(function(importedBooks){
+        state.books=importedBooks.concat(state.books);
+        syncLegacyCastBridge();
+        renderBookDropdownOptions();
+        renderSongsPage();
+      });
+    }
+    function onCastConnected(c){var d=document.getElementById('cast-dot'),l=document.getElementById('cast-label');if(c){d.classList.add('active');if(l)l.textContent='Connected';}else{d.classList.remove('active');if(l)l.textContent='Not Connected';}}
+    function isCasting(){
+      try{if(window.Android&&typeof window.Android.isMirroring==='function')return window.Android.isMirroring();}catch(e){}
+      return document.getElementById('cast-dot').classList.contains('active');
+    }
+    function castingKeyboardWarn(){
+      var casting=false;
+      try{if(window.Android&&typeof window.Android.isMirroring==='function')casting=window.Android.isMirroring();}catch(e){}
+      if(!casting)casting=document.getElementById('cast-dot').classList.contains('active');
+      if(casting){
+        toastWarn('Keyboard unavailable while casting');
+        if(navigator.vibrate)navigator.vibrate(200);
+        return true;
+      }
+    return false;
+    }
+    init();
+
+      /* ── BIBLE VERSION MANAGER ── */
+    function getBibleVerCacheInfo(ver){
+      var total=0,books=66;
+      var chapters=[50,40,27,36,34,24,21,4,31,24,22,25,29,36,10,13,10,42,150,31,12,8,66,52,5,48,12,14,3,9,1,4,7,3,3,3,2,14,4,28,16,24,21,28,16,16,13,6,6,4,4,5,3,6,4,3,1,13,5,5,3,5,1,1,1,22];
+      var cached=0;
+      for(var b=1;b<=books;b++){
+        var chs=chapters[b-1]||1;
+        for(var c=1;c<=chs;c++){
+          if(load(getBibleKey(ver,b,c),null)!==null)cached++;
+          total++;
+        }
+      }
+      return{cached:cached,total:total};
+    }
+
+    function deleteBibleVersion(ver){
+      openModal('Delete Bible Version','<p style="color:var(--text);">Delete all cached chapters for <strong>'+ver+'</strong>? This cannot be undone.</p>',
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="confirmDeleteBibleVersion(\''+ver+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Delete</button>','warning');
+    }
+
+    function confirmDeleteBibleVersion(ver){
+  var books=66;
+  var chapters=[50,40,27,36,34,24,21,4,31,24,22,25,29,36,10,13,10,42,150,31,12,8,66,52,5,48,12,14,3,9,1,4,7,3,3,3,2,14,4,28,16,24,21,28,16,16,13,6,6,4,4,5,3,6,4,3,1,13,5,5,3,5,1,1,1,22];
+  for(var b=1;b<=books;b++){
+    var chs=chapters[b-1]||1;
+    for(var c=1;c<=chs;c++){
+      localStorage.removeItem(getBibleKey(ver,b,c));
+    }
+  }
+  delete downloadStates[ver]; // ← add this
+  toast(ver+' deleted.');
+  renderBibleVerManager();
+  closeModal();
+}
+
+    var downloadStates = {};
+
+function downloadBibleVersion(ver){
+  // Guard against duplicate/overlapping downloads of the same version (e.g. a fast
+  // double-tap on the Download button re-entering this while one is already running).
+  if(downloadStates[ver]&&!downloadStates[ver].paused){toast(ver+' is already downloading');return;}
+  var books=66;
+  var chapters=[50,40,27,36,34,24,21,4,31,24,22,25,29,36,10,13,10,42,150,31,12,8,66,52,5,48,12,14,3,9,1,4,7,3,3,3,2,14,4,28,16,24,21,28,16,16,13,6,6,4,4,5,3,6,4,3,1,13,5,5,3,5,1,1,1,22];
+  var queue=[];
+  for(var b=1;b<=books;b++){
+    var chs=chapters[b-1]||1;
+    for(var c=1;c<=chs;c++){
+      if(load(getBibleKey(ver,b,c),null)===null)queue.push({b:b,c:c});
+    }
+  }
+  if(!queue.length){toast(ver+' already fully downloaded.');return;}
+  if(!downloadStates[ver]){
+    downloadStates[ver]={paused:false,fetching:false,queue:queue,index:0,total:queue.length,done:0};
+  } else {
+    downloadStates[ver].paused=false;
+  }
+  renderBibleVerManager();
+  runDownload(ver);
+}
+
+function runDownload(ver){
+  var dlState=downloadStates[ver];
+  if(!dlState||dlState.paused||dlState.fetching)return;
+  dlState.fetching=true;
+  function next(i){
+    var fillEl=document.getElementById('bible-dl-fill-'+ver);
+    var statusEl=document.getElementById('bible-ver-status-'+ver);
+    var s=downloadStates[ver];
+    if(!s||s.paused){if(s)s.fetching=false;return;}
+    if(i>=s.queue.length){
+      s.fetching=false;
+      delete downloadStates[ver];
+      var info=getBibleVerCacheInfo(ver);
+      toast(info.cached>=info.total?(ver+' download complete!'):(ver+' download finished — some chapters failed, tap Resume to retry.'));
+      renderBibleVerManager();
+      return;
+    }
+    var item=s.queue[i];
+    fetch('https://bolls.life/get-text/'+ver+'/'+item.b+'/'+item.c+'/')
+      .then(function(r){return r.json();})
+      .then(function(data){
+        if(downloadStates[ver]!==s)return; // version was deleted/reset mid-flight
+        save(getBibleKey(ver,item.b,item.c),data.map(function(v){return{n:v.verse,t:stripStrongs(v.text)};}));
+        s.done++;s.index=i+1;
+        var pct=Math.round(s.done/s.total*100);
+        if(fillEl)fillEl.style.width=pct+'%';
+        if(statusEl)statusEl.textContent='Downloading... '+pct+'% ('+s.done+'/'+s.total+' chapters)';
+        setTimeout(function(){next(i+1);},80);
+      }).catch(function(){
+        if(downloadStates[ver]!==s)return;
+        setTimeout(function(){next(i+1);},300);
+      });
+  }
+  next(dlState.index);
+}
+
+function pauseDownload(ver){
+  if(downloadStates[ver])downloadStates[ver].paused=true;
+  renderBibleVerManager();
+}
+
+function resumeDownload(ver){
+  if(!downloadStates[ver]){
+    // rebuild queue for versions paused across page reload
+    downloadBibleVersion(ver);
+    return;
+  }
+  downloadStates[ver].paused=false;
+  renderBibleVerManager();
+  runDownload(ver);
+}
+
+    function renderBibleVerManager(){
+      var el=document.getElementById('bible-ver-manager');
+      if(!el)return;
+      var html='';
+      VERSIONS.forEach(function(v){
+        var info=getBibleVerCacheInfo(v.v);
+        var pct=Math.round(info.cached/info.total*100);
+        var fully=info.cached===info.total;
+        var none=info.cached===0;
+        var statusText=fully?'✅ Downloaded ('+info.total+' chapters)':none?'Not downloaded':'⬇ '+info.cached+'/'+info.total+' chapters cached';
+        html+='<div class="bible-ver-item">'+
+          '<div class="bible-ver-info">'+
+            '<div class="bible-ver-name">'+v.label+'</div>'+
+            '<div class="bible-ver-status" id="bible-ver-status-'+v.v+'">'+statusText+'</div>'+
+            (!fully?('<div style="margin-top:4px;background:var(--bg3);border-radius:4px;height:3px;overflow:hidden;">'+
+            '<div id="bible-dl-fill-'+v.v+'" style="height:100%;width:'+pct+'%;background:var(--accent);border-radius:4px;transition:width 0.3s;"></div>'+
+            '</div>'):'')+
+          '</div>'+
+          '<div class="bible-ver-actions">'+
+            ((!fully&&none&&!downloadStates[v.v])?('<button class="btn btn-secondary btn-sm" id="bible-dl-btn-'+v.v+'" onclick="downloadBibleVersion(\''+v.v+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download</button>'):'')+
+            ((!fully&&downloadStates[v.v]&&!downloadStates[v.v].paused)?('<button class="btn btn-secondary btn-sm" id="bible-pause-btn-'+v.v+'" onclick="pauseDownload(\''+v.v+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>Pause</button>'):'')+
+            ((!fully&&(!none||downloadStates[v.v])&&(!downloadStates[v.v]||downloadStates[v.v].paused))?('<button class="btn btn-secondary btn-sm" id="bible-resume-btn-'+v.v+'" onclick="resumeDownload(\''+v.v+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>Resume</button>'):'')+
+            ((!none||!!downloadStates[v.v])?('<button class="btn btn-danger" style="padding:10px;" id="bible-del-btn-'+v.v+'" onclick="deleteBibleVersion(\''+v.v+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>'):'')+
+          '</div>'+
+        '</div>';
+      });
+      el.innerHTML=html;
+    }
+
+</script>
+</body>
+</html>
