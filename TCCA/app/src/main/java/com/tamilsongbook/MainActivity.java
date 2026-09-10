@@ -329,10 +329,20 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void showPdf(final String dataUrl) {
+        public void showPdf(final String dataUrl, final int page) {
             runOnUiThread(new Runnable() { public void run() {
                 if (castPresentation != null)
-                    castPresentation.runJS("showPdf('" + esc(dataUrl) + "')");
+                    castPresentation.runJS("if(typeof showPdf==='function')showPdf('" + esc(dataUrl) + "'," + page + ")");
+            }});
+        }
+
+        // Real PPTX rendering (@aiden0z/pptx-renderer) — same shape as showPdf above.
+        // slideIndex is 0-based, matching the source's own currentSlide field.
+        @JavascriptInterface
+        public void showPptx(final String dataUrl, final int slideIndex) {
+            runOnUiThread(new Runnable() { public void run() {
+                if (castPresentation != null)
+                    castPresentation.runJS("if(typeof showPptx==='function')showPptx('" + esc(dataUrl) + "'," + slideIndex + ")");
             }});
         }
 
@@ -381,6 +391,28 @@ public class MainActivity extends Activity {
                 if (castPresentation != null)
                     castPresentation.runJS("if(typeof setSlideTransition==='function')setSlideTransition('" +
                         esc(type) + "'," + duration + ",'" + esc(easing) + "'," + instant + "," + enterDuration + ")");
+            }});
+        }
+
+        // Generic passthrough for Cast Control's Source-control side panel
+        // (Image/Video/Image Collection Display Mode + Frame Ratio + Zoom/Pan,
+        // Video transport, Ideal Screen Clock font color/size — see
+        // presenter.html's SOURCE CONTROLS RUNTIME) so the real external cast
+        // display picks up the exact same non-transitional style/state updates
+        // as the local Preview/Live mirror iframes, without needing a new
+        // bespoke @JavascriptInterface method per control. fnName is
+        // whitelisted to a bare identifier (never attacker input in practice —
+        // it only ever comes from this app's own controller.html — but kept
+        // strict regardless) and argsJson is a plain JSON array built by
+        // controller.html's own JSON.stringify(), so this never runs anything
+        // other than one of presenter.html's own named functions.
+        @JavascriptInterface
+        public void sourceCommand(final String fnName, final String argsJson) {
+            if (fnName == null || !fnName.matches("[a-zA-Z_][a-zA-Z0-9_]*")) return;
+            final String safeArgs = (argsJson != null) ? argsJson : "[]";
+            runOnUiThread(new Runnable() { public void run() {
+                if (castPresentation != null)
+                    castPresentation.runJS("if(typeof " + fnName + "==='function')" + fnName + ".apply(null," + safeArgs + ")");
             }});
         }
 

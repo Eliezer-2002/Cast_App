@@ -1,0 +1,15 @@
+{
+  "name": "cast_app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dev-only dependency pins for vendoring the PDF/PPTX rendering engines used by TCCA's Cast Control Sources. Not part of the Android build — see scripts/vendor-libs.mjs.",
+  "scripts": {
+    "vendor": "node scripts/vendor-libs.mjs"
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@aiden0z/pptx-renderer": "^1.2.4",
+    "pdfjs-dist": "^6.3.289"
+  }
+}

@@ -114,21 +114,55 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;-webkit-text-si
   letter-spacing:0;
   transition:color .37s ease,letter-spacing .15s ease;
 }
+/* MEDIA FRAME — wraps #media/#video/#pdf-canvas/#pptx-fit so an Image/Video/
+   Image-Collection/PDF/PPTX Source can be given a Display Mode (fit/cover/
+   fill) and a Frame Ratio (see setSourceFrame() below) without touching the
+   original file or the layer underneath. #media-frame-box is sized to the
+   configured ratio in JS (_applyMediaFrameBox — CSS aspect-ratio alone can't
+   reliably constrain-by-the-shorter-axis across WebView versions) and
+   centered by the outer flex frame; 'auto' ratio just fills the frame
+   exactly like the old fixed width:100%/height:100% behavior. Zoom/pan
+   (setSourceZoom()) is a transform on the media element itself, inside that
+   box, so it never affects layout. #pdf-canvas is real pdfjs-dist output, so
+   it gets the same CSS object-fit treatment as #media/#video; #pptx-fit/
+   #pptx-inner render real DOM (@aiden0z/pptx-renderer) and get the manual
+   equivalent — see _applyPptxFit() below. */
+#media-frame{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+#media-frame-box{ position:relative; width:100%; height:100%; overflow:hidden; flex-shrink:0; }
+#media-frame-box.fit-contain #media,#media-frame-box.fit-contain #video,#media-frame-box.fit-contain #pdf-canvas{ object-fit:contain; }
+#media-frame-box.fit-cover #media,#media-frame-box.fit-cover #video,#media-frame-box.fit-cover #pdf-canvas{ object-fit:cover; }
+#media-frame-box.fit-fill #media,#media-frame-box.fit-fill #video,#media-frame-box.fit-fill #pdf-canvas{ object-fit:fill; }
 #media{
   position:absolute;inset:0;width:100%;height:100%;
-  object-fit:fill;display:none;
+  display:none;transform-origin:center center;
 }
 #video{
   position:absolute;inset:0;width:100%;height:100%;
-  object-fit:fill;display:none;
+  display:none;transform-origin:center center;
 }
 #camera-video{
   position:absolute;inset:0;width:100%;height:100%;
   object-fit:contain;background:#000;display:none;
 }
-#pdf-embed{
+/* PDF is now rendered for real (pdfjs-dist) onto this canvas instead of the
+   WebView's native PDF plugin — same frame/zoom mechanism as #media/#video
+   (object-fit above, transform via _applyMediaZoomTransform()). */
+#pdf-canvas{
   position:absolute;inset:0;width:100%;height:100%;
-  border:none;background:#fff;display:none;
+  background:#fff;display:none;transform-origin:center center;
+}
+/* PPTX renders real HTML/SVG DOM (via @aiden0z/pptx-renderer), not a plain
+   media element, so it can't use CSS object-fit like #media/#video/#pdf-canvas
+   do. #pptx-fit gets a JS-computed contain/cover/fill scale (Display Mode —
+   see _applyPptxFit()); #pptx-inner is sized to the deck's own intrinsic
+   slideWidth x slideHeight and is what the renderer draws into, then gets the
+   SAME zoom/pan transform as every other media type (_applyMediaZoomTransform()). */
+#pptx-fit{
+  position:absolute;inset:0;width:100%;height:100%;
+  display:none;overflow:hidden;background:#fff;
+}
+#pptx-inner{
+  position:absolute;top:50%;left:50%;transform-origin:0 0;
 }
 @media (prefers-reduced-motion:reduce){
   #sources-layer,#overlay-layer,#title,#content,#clock,#custom-text{transition:none;}
@@ -193,10 +227,15 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;-webkit-text-si
       <div id="date"></div>
       <div id="custom-text"></div>
     </div>
-    <img id="media" src="">
-    <video id="video" autoplay loop muted playsinline></video>
+    <div id="media-frame">
+      <div id="media-frame-box" class="fit-contain">
+        <img id="media" src="">
+        <video id="video" muted playsinline></video>
+        <canvas id="pdf-canvas"></canvas>
+        <div id="pptx-fit"><div id="pptx-inner"></div></div>
+      </div>
+    </div>
     <video id="camera-video" autoplay muted playsinline></video>
-    <embed id="pdf-embed" type="application/pdf">
   </div>
   <div id="overlay-layer">
     <div id="title-area">
@@ -471,16 +510,191 @@ function tickClock(){
 }
 function pad(n){return n<10?'0'+n:n;}
 
+// ============================================================
+// SOURCE CONTROLS RUNTIME — lightweight, non-transitional style/state updates
+// for the Cast Control "Sources → swipe → side panel" controls (Image/Video/
+// Image Collection Display Mode + Frame Ratio + Zoom/Pan, Video transport,
+// Ideal Screen Clock font color/size). These never go through
+// _isPresenterScreenCall()/animateLayer() — they only restyle or operate on
+// whatever is ALREADY showing on the Sources layer, so calling them never
+// presents/changes WHICH source is on screen and never re-triggers a slide
+// transition. controller.html reaches this file's local iframes directly
+// (same-origin contentWindow calls) and the real external cast display via
+// the generic Android.sourceCommand() passthrough — see MainActivity.java.
+// ============================================================
+var FRAME_RATIOS={'1:1':1,'4:3':4/3,'16:9':16/9,'16:10':16/10,'21:9':21/9};
+var _srcDisplayMode='fit', _srcFrameRatio='auto', _srcZoom=1, _srcPanX=0, _srcPanY=0;
+// PPTX's intrinsic slide size (px, set by the renderer module once a deck
+// loads) and the resulting Display Mode fit-scale — see _applyPptxFit()
+// below. #pptx-inner is real DOM (not a plain media element), so it can't
+// use CSS object-fit like #media/#video/#pdf-canvas do; this is the manual
+// equivalent, computed here so all frame/zoom math stays in one place.
+var _pptxSlideW=0, _pptxSlideH=0, _pptxFitScaleX=1, _pptxFitScaleY=1;
+
+// Sizes #media-frame-box to the configured Frame Ratio, constrained to fit
+// within whatever this presenter.html instance's own viewport actually is
+// (the 1920x1080-then-CSS-scaled iframe for Preview/Live, or the real
+// external display's native resolution for the cast Presentation) — computed
+// in JS rather than via CSS aspect-ratio so it degrades safely on any WebView
+// version and always fits the shorter axis. 'auto'/unrecognized ratio simply
+// fills the frame exactly like the original fixed width:100%/height:100%.
+function _applyMediaFrameBox(){
+  var box=document.getElementById('media-frame-box');
+  if(!box)return;
+  var ratio=FRAME_RATIOS[_srcFrameRatio];
+  if(!ratio){ box.style.width='100%'; box.style.height='100%'; return; }
+  var cw=document.documentElement.clientWidth||window.innerWidth||1;
+  var ch=document.documentElement.clientHeight||window.innerHeight||1;
+  if((cw/ch)>ratio){ box.style.height='100%'; box.style.width=Math.round(ch*ratio)+'px'; }
+  else { box.style.width='100%'; box.style.height=Math.round(cw/ratio)+'px'; }
+}
+window.addEventListener('resize',_applyMediaFrameBox);
+
+// Called by controller.html (image/video/image-collection controls) whenever
+// the source's Display Mode or Frame Ratio setting changes, AND once right
+// after every showGap('image'/'video',...) call so a freshly-staged source
+// immediately reflects its own saved settings instead of momentarily showing
+// the previous source's frame/fit. Never touches WHICH file is loaded.
+function setSourceFrame(displayMode,frameRatio){
+  _srcDisplayMode=displayMode||'fit';
+  _srcFrameRatio=frameRatio||'auto';
+  var box=document.getElementById('media-frame-box');
+  if(box){
+    box.classList.remove('fit-contain','fit-cover','fit-fill');
+    box.classList.add(_srcDisplayMode==='fullscreen'?'fit-fill':(_srcDisplayMode==='cover'?'fit-cover':'fit-contain'));
+  }
+  _applyMediaFrameBox();
+  _applyPptxFit();
+  _applyMediaZoomTransform();
+  // setSourceFrame() is always called right AFTER showPdf() on a fresh
+  // stage/goLive (see controller.html's stageSourceToPreview/goLive: content
+  // first, then style) — that means the PDF canvas's very first render can
+  // land before the frame box has its final Frame-Ratio size. Re-rendering
+  // here (module-defined, a no-op until a PDF is actually loaded) keeps the
+  // canvas at full resolution for the box it actually ends up in, without
+  // reordering the existing stage/goLive pipeline other source types rely on.
+  if(typeof window.__reapplyPdfAtCurrentBox==='function')window.__reapplyPdfAtCurrentBox();
+}
+// Recomputes #pptx-inner's Display Mode fit-scale (contain/cover/fill) from
+// the loaded deck's own intrinsic slideWidth/slideHeight vs the current
+// #media-frame-box size — the manual, DOM equivalent of the object-fit rules
+// #media/#video/#pdf-canvas already get for free from CSS. A no-op until a
+// PPTX slide has actually loaded (_pptxSlideW>0).
+function _applyPptxFit(){
+  if(!_pptxSlideW||!_pptxSlideH)return;
+  var box=document.getElementById('media-frame-box');
+  if(!box)return;
+  var bw=box.clientWidth||1, bh=box.clientHeight||1;
+  var sx=bw/_pptxSlideW, sy=bh/_pptxSlideH;
+  if(_srcDisplayMode==='fullscreen'){ _pptxFitScaleX=sx; _pptxFitScaleY=sy; }
+  else if(_srcDisplayMode==='cover'){ var sc=Math.max(sx,sy); _pptxFitScaleX=sc; _pptxFitScaleY=sc; }
+  else { var sf=Math.min(sx,sy); _pptxFitScaleX=sf; _pptxFitScaleY=sf; }
+}
+// Pan is a percentage of the media's OWN (unscaled) box size in each axis;
+// clamping it to ±(zoom-1)*50 keeps the zoomed image's edge from ever being
+// pulled past the frame boundary (no infinite pan / no revealed empty space)
+// regardless of how far a repeated Pan button press tries to push it — see
+// _applyMediaZoomTransform()'s translate-then-scale order below, which is
+// exactly what makes that fixed-percentage bound correct.
+function _clampPan(zoom,pan){
+  var maxPan=Math.max(0,(zoom-1)*50);
+  return Math.max(-maxPan,Math.min(maxPan,pan||0));
+}
+function _applyMediaZoomTransform(){
+  var z=Math.max(1,Math.min(4,_srcZoom||1));
+  var px=_clampPan(z,_srcPanX), py=_clampPan(z,_srcPanY);
+  var t='translate('+px+'%,'+py+'%) scale('+z+')';
+  var media=document.getElementById('media'), video=document.getElementById('video'), pdf=document.getElementById('pdf-canvas');
+  if(media)media.style.transform=t;
+  if(video)video.style.transform=t;
+  if(pdf)pdf.style.transform=t;
+  // #pptx-inner is intrinsically sized (not width:100%/height:100% like the
+  // three elements above), so it's centered via translate(-50%,-50%) from a
+  // top:50%/left:50% position (see presenter.html's <style>) and its Display
+  // Mode fit-scale (_applyPptxFit()) is folded into the same scale() as zoom,
+  // rather than needing a second wrapper element.
+  var pptxInner=document.getElementById('pptx-inner');
+  if(pptxInner)pptxInner.style.transform='translate(-50%,-50%) translate('+px+'%,'+py+'%) scale('+(_pptxFitScaleX*z)+','+(_pptxFitScaleY*z)+')';
+}
+function setSourceZoom(zoom,panX,panY){
+  _srcZoom=zoom||1; _srcPanX=panX||0; _srcPanY=panY||0;
+  _applyMediaZoomTransform();
+}
+
+// Ideal Screen Clock — font color/size only (never touches #date, which has
+// no user-facing control in this feature). Re-applied fresh every time the
+// Clock source is (re)staged, same pattern as setSourceFrame() above.
+function setClockStyle(color,size){
+  var clock=document.getElementById('clock');
+  if(!clock)return;
+  if(color)clock.style.color=color;
+  if(size)clock.style.fontSize=size+'px';
+}
+
+// Video end behavior — 'loop' reuses the native <video loop> attribute
+// (matches this app's original always-loop behavior when a video source is
+// the default 'loop' setting — see controller.html's confirmAddSource()).
+// 'stop'/'presentSource' both leave loop off; 'presentSource' is completed by
+// controller.html listening for the native 'ended' event below.
+function setVideoEndBehavior(behavior){
+  var v=document.getElementById('video');
+  if(v)v.loop=(behavior==='loop');
+}
+// Video transport — Play/Pause/Restart/Seek. Deliberately no volume/mute
+// control here (the <video> stays permanently muted — see the `muted`
+// attribute in the markup above; this app never plays Source audio).
+function videoControl(action,arg){
+  var v=document.getElementById('video');
+  if(!v)return;
+  var dur=isFinite(v.duration)?v.duration:0;
+  if(action==='play'){ v.play().catch(function(){}); }
+  else if(action==='pause'){ v.pause(); }
+  else if(action==='restart'){ v.currentTime=0; v.play().catch(function(){}); }
+  else if(action==='seekBy'){ v.currentTime=Math.max(0,Math.min(dur,(v.currentTime||0)+(arg||0))); }
+  else if(action==='seekTo'){ v.currentTime=Math.max(0,Math.min(dur,arg||0)); }
+}
+// Polled by controller.html (only while a Video source's control panel is
+// open) to drive the timeline/current-time UI — a plain return value, not a
+// screen-changing call, so it's read directly rather than via presenterCall/
+// previewCall's fire-and-forget _runFrameCall.
+function getVideoStatus(){
+  var v=document.getElementById('video');
+  if(!v)return null;
+  return {currentTime:v.currentTime||0,duration:isFinite(v.duration)?v.duration:0,paused:v.paused};
+}
+(function(){
+  var v=document.getElementById('video');
+  if(!v)return;
+  // Fires only when the video actually reaches its end with loop=false (the
+  // 'stop' and 'presentSource' end-behaviors) — never for 'loop', which the
+  // browser handles internally without ever dispatching 'ended'. Reaches
+  // controller.html directly (same-origin contentWindow) for the Preview/Live
+  // iframes; harmlessly no-ops for the real external cast Presentation, which
+  // has no such parent (see controller.html's __onSourceVideoEnded and its
+  // own comment on why "Present Another Source" is driven from the local
+  // mirror iframes rather than needing a new native Android callback).
+  v.addEventListener('ended',function(){
+    try{
+      if(window.parent&&window.parent!==window&&typeof window.parent.__onSourceVideoEnded==='function'){
+        window.parent.__onSourceVideoEnded(window.__frameRole||null);
+      }
+    }catch(e){}
+  });
+})();
+
 // Releases the camera <video>'s srcObject (without stopping the underlying
 // MediaStream — that stream is owned by controller.html and may still be in
-// use elsewhere) and hides the PDF embed. Called whenever a DIFFERENT Source
-// (clock/blank/text/image/video/pdf) takes over the sources layer — a purely
-// intra-layer concern, never called by the overlay's showContent()/showSplit().
+// use elsewhere) and hides the PDF/PPTX surfaces. Called whenever a DIFFERENT
+// Source (clock/blank/text/image/video/pdf/ppt) takes over the sources layer
+// — a purely intra-layer concern, never called by the overlay's
+// showContent()/showSplit().
 function _releaseSpecialSurfaces(){
   var cam=document.getElementById('camera-video');
   if(cam){cam.pause();cam.srcObject=null;cam.style.display='none';}
-  var pdf=document.getElementById('pdf-embed');
-  if(pdf&&pdf.style.display!=='none'){pdf.style.display='none';pdf.removeAttribute('src');}
+  var pdf=document.getElementById('pdf-canvas');
+  if(pdf)pdf.style.display='none';
+  var pptx=document.getElementById('pptx-fit');
+  if(pptx)pptx.style.display='none';
 }
 
 // Clears the overlay's title/hint grid-ratio state (see #overlay-layer.slide-
@@ -715,7 +929,8 @@ function showCamera(stream){
   document.getElementById('custom-text').style.display='none';
   document.getElementById('media').style.display='none';
   document.getElementById('video').style.display='none';
-  document.getElementById('pdf-embed').style.display='none';
+  document.getElementById('pdf-canvas').style.display='none';
+  document.getElementById('pptx-fit').style.display='none';
   document.getElementById('sources-layer').style.background='#000000';
   var cam=document.getElementById('camera-video');
   if(stream){
@@ -729,23 +944,11 @@ function showCamera(stream){
   animateLayer('sources-layer');
 }
 
-// Called by Android bridge — show a PDF (data: URL) using the WebView's
-// built-in PDF renderer via <embed>. There is no bundled PDF.js/renderer in
-// this build; if the WebView itself can't render PDFs, this will simply show
-// a blank/broken-plugin area rather than pretending to render one.
-// SOURCES ONLY — see showGap() above.
-function showPdf(dataUrl){
-  hideClock();
-  _releaseSpecialSurfaces();
-  document.getElementById('custom-text').style.display='none';
-  document.getElementById('media').style.display='none';
-  document.getElementById('video').style.display='none';
-  document.getElementById('sources-layer').style.background='#ffffff';
-  var pdf=document.getElementById('pdf-embed');
-  if(dataUrl){pdf.src=dataUrl;pdf.style.display='block';}
-  currentSourceMode='pdf';
-  animateLayer('sources-layer');
-}
+// showPdf(dataUrl, pageNum) and showPptx(dataUrl, slideIndex) — real
+// pdfjs-dist/@aiden0z/pptx-renderer rendering onto #pdf-canvas/#pptx-inner —
+// are defined in the <script type="module"> block near the end of this file
+// (they need the ES module imports in lib/renderers/); see that block's own
+// comment. SOURCES ONLY — see showGap() above.
 
 // Called by Android bridge — clear the SOURCES layer back to clock. SOURCES
 // ONLY: leaves whatever Song/Bible overlay is currently showing untouched —
@@ -891,6 +1094,114 @@ showClock();
 reportPresenterViewport();
 window.addEventListener('load',reportPresenterViewport);
 setTimeout(reportPresenterViewport,100);
+</script>
+
+<!-- ══════════════════════════════════════
+     PDF / PPTX RENDERING ENGINES — real pdfjs-dist / @aiden0z/pptx-renderer
+     rendering, sharing lib/renderers/*.js with controller.html's Source
+     Controls thumbnail strip (see that file's own comment). A module script
+     is deferred (runs after the classic <script> above has fully executed,
+     regardless of tag order — see HTML's module-execution timing), so every
+     classic-script global referenced here (hideClock, animateLayer,
+     _releaseSpecialSurfaces, _applyPptxFit, _applyMediaZoomTransform,
+     currentSourceMode, _pptxSlideW/H, _srcDisplayMode, …) is guaranteed to
+     already exist — this only DEFINES window.showPdf/window.showPptx and
+     leaves all frame/zoom/display-mode math in the classic script above,
+     which already owns that for every other source type. ══════════════════════════════════════ -->
+<script type="module">
+import * as PdfEngine from './lib/renderers/pdf-engine.js';
+import * as PptxEngine from './lib/renderers/pptx-engine.js';
+
+var _pdfCurrent=null;  // {dataUrl,page} — the most recently REQUESTED page, used to drop stale async results
+var _pptxCurrent=null; // {dataUrl,slideIndex}
+
+// Reaches controller.html (same-origin parent for the Preview/Live mirror
+// iframes) so a render failure surfaces as a real toast instead of silently
+// failing — mirrors the existing window.parent.__onSourceVideoEnded bridge.
+// On the real external cast display there's no parent to report to, so this
+// just logs, same as this file's other "no toast possible there" spots.
+function _reportRenderError(message){
+  console.error(message);
+  try{
+    if(window.parent&&window.parent!==window&&typeof window.parent.__onSourceRenderError==='function'){
+      window.parent.__onSourceRenderError(window.__frameRole||null,message);
+    }
+  }catch(e){}
+}
+
+window.showPdf=async function(dataUrl,pageNum){
+  hideClock();
+  _releaseSpecialSurfaces();
+  document.getElementById('custom-text').style.display='none';
+  document.getElementById('media').style.display='none';
+  document.getElementById('video').style.display='none';
+  document.getElementById('sources-layer').style.background='#ffffff';
+  var canvas=document.getElementById('pdf-canvas');
+  currentSourceMode='pdf';
+  if(!dataUrl){canvas.style.display='none';_pdfCurrent=null;animateLayer('sources-layer');return;}
+  canvas.style.display='block';
+  var page=Math.max(1,pageNum||1);
+  _pdfCurrent={dataUrl:dataUrl,page:page};
+  animateLayer('sources-layer');
+  try{
+    var doc=await PdfEngine.loadPdf(dataUrl);
+    if(!_pdfCurrent||_pdfCurrent.dataUrl!==dataUrl||_pdfCurrent.page!==page)return; // superseded by a newer call
+    var box=document.getElementById('media-frame-box');
+    await PdfEngine.renderPageToCanvas(doc,page,canvas,{maxW:box.clientWidth,maxH:box.clientHeight});
+  }catch(e){
+    _reportRenderError('Could not render PDF: '+(e&&e.message?e.message:e));
+  }
+};
+
+window.showPptx=async function(dataUrl,slideIndex){
+  hideClock();
+  _releaseSpecialSurfaces();
+  document.getElementById('custom-text').style.display='none';
+  document.getElementById('media').style.display='none';
+  document.getElementById('video').style.display='none';
+  document.getElementById('sources-layer').style.background='#ffffff';
+  var fitEl=document.getElementById('pptx-fit');
+  currentSourceMode='pptx';
+  if(!dataUrl){fitEl.style.display='none';_pptxCurrent=null;animateLayer('sources-layer');return;}
+  fitEl.style.display='block';
+  var idx=Math.max(0,slideIndex||0);
+  _pptxCurrent={dataUrl:dataUrl,slideIndex:idx};
+  animateLayer('sources-layer');
+  try{
+    var inner=document.getElementById('pptx-inner');
+    var meta=await PptxEngine.renderSlideInto(dataUrl,idx,inner);
+    if(!_pptxCurrent||_pptxCurrent.dataUrl!==dataUrl||_pptxCurrent.slideIndex!==idx)return; // superseded
+    inner.style.width=meta.slideWidth+'px';
+    inner.style.height=meta.slideHeight+'px';
+    _pptxSlideW=meta.slideWidth;_pptxSlideH=meta.slideHeight;
+    _applyPptxFit();
+    _applyMediaZoomTransform();
+  }catch(e){
+    _reportRenderError('Could not render PowerPoint slide: '+(e&&e.message?e.message:e));
+  }
+};
+
+// Re-renders the current PDF page at #media-frame-box's ACTUAL current pixel
+// size — never re-parses the source (cached by dataUrl in pdf-engine.js).
+// Called on window resize and, via setSourceFrame()'s own hook above, right
+// after a Display Mode/Frame Ratio change resizes the box.
+window.__reapplyPdfAtCurrentBox=function(){
+  if(!_pdfCurrent||!_pdfCurrent.dataUrl)return;
+  var canvas=document.getElementById('pdf-canvas');
+  var box=document.getElementById('media-frame-box');
+  var req=_pdfCurrent;
+  PdfEngine.loadPdf(req.dataUrl).then(function(doc){
+    if(_pdfCurrent!==req)return;
+    return PdfEngine.renderPageToCanvas(doc,req.page,canvas,{maxW:box.clientWidth,maxH:box.clientHeight});
+  }).catch(function(){});
+};
+window.addEventListener('resize',function(){
+  window.__reapplyPdfAtCurrentBox();
+  if(_pptxSlideW){
+    _applyPptxFit();
+    _applyMediaZoomTransform();
+  }
+});
 </script>
 </body>
 </html>

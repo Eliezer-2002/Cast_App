@@ -592,7 +592,7 @@
        SOURCES TAB
     ══════════════════════════════════════ */
     .sources-section-label { font-size:10px; color:var(--text2); font-weight:700; text-transform:uppercase; letter-spacing:1px; padding:10px 10px 6px; }
-    .source-card { display:flex; align-items:center; gap:10px; padding:9px 10px; background:var(--card); border:1.5px solid var(--border); border-radius:12px; transition:border-color .15s,background .15s; cursor:pointer; }
+    .source-card { display:flex; align-items:center; gap:10px; padding:9px 10px; background:var(--card); border:1.5px solid var(--border); border-radius:12px; transition:border-color .15s,background .15s,transform .2s ease; cursor:pointer; }
     .source-card:active { border-color:var(--accent); transform:scale(.98); }
     .source-card-unusable { opacity:.55; cursor:default; }
     .source-card-unusable:active { border-color:var(--border); transform:none; }
@@ -634,6 +634,83 @@
     .device-list { display:flex; flex-direction:column; gap:6px; max-height:160px; overflow-y:auto; }
     .device-item { padding:9px 10px; border-radius:9px; background:var(--bg3); border:1.5px solid var(--border); cursor:pointer; font-size:12px; color:var(--text); }
     .device-item.active { border-color:var(--accent); background:rgba(155,89,182,.15); }
+
+    /* ══════════════════════════════════════
+       SOURCE CONTROLS — swipe-to-reveal side panel (right-to-left swipe on a
+       source-card opens per-source controls; see setupSourceCardGestures()/
+       openSourceControls() in the script). The swipe transform is applied as
+       an inline style (always wins over :active's transform:scale below), so
+       the two never fight; releasing the gesture always clears it back to ''.
+    ══════════════════════════════════════ */
+    .source-card { touch-action:pan-y; will-change:transform; }
+    .source-card.dragging { transition:none; }
+
+    /* #panel-sources is the positioning context for #source-ctrl-overlay
+       below — position:relative here (no other effect: nothing else in this
+       panel is positioned against it) is what makes the overlay's
+       position:absolute/inset:0 resolve against the SOURCES PANEL's own box
+       instead of falling back to the viewport. Scoped to this one panel's id
+       (not the shared .ctrl-panel class Songs/Bible also use) so Songs/Bible
+       are never affected. */
+    #panel-sources { position:relative; }
+    /* Sources-panel-only menu — position:absolute (NOT fixed) so it is
+       contained by #panel-sources above rather than the viewport/<body>;
+       inset:0 then sizes it to exactly that panel's own rendered box, and
+       #panel-sources' own overflow:hidden (inline style on the element)
+       clips it there too, so it can never visually cover the header, tabs,
+       monitor stage, transfer bar, or any other Cast Control panel. */
+    .source-ctrl-overlay { position:absolute; inset:0; background:rgba(0,0,0,.55); z-index:400; display:none; justify-content:flex-end; }
+    .source-ctrl-overlay.open { display:flex; }
+    .source-ctrl-panel { width:100%; max-width:380px; height:100%; background:var(--bg2); border-left:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; animation:srcPanelIn .18s ease; box-shadow:-8px 0 24px rgba(0,0,0,.4); }
+    @keyframes srcPanelIn { from{transform:translateX(100%);} to{transform:translateX(0);} }
+    .source-ctrl-header { display:flex; align-items:center; gap:10px; padding:14px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
+    .source-ctrl-header-thumb { width:40px; height:30px; border-radius:7px; overflow:hidden; background:#000; border:1px solid var(--border); flex-shrink:0; display:flex; align-items:center; justify-content:center; color:var(--accent); }
+    .source-ctrl-header-thumb svg { width:16px; height:16px; }
+    .source-ctrl-header-thumb img,.source-ctrl-header-thumb video { width:100%; height:100%; object-fit:cover; }
+    .source-ctrl-header-info { flex:1; min-width:0; }
+    .source-ctrl-header-name { font-size:14px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .source-ctrl-header-type { font-size:10px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; margin-top:1px; }
+    .source-ctrl-body { flex:1; overflow-y:auto; padding:6px 0 20px; }
+    .source-ctrl-section { padding:12px 14px; border-bottom:1px solid var(--border); }
+    .source-ctrl-section-label { font-size:10px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin-bottom:9px; }
+    .source-ctrl-row { display:flex; align-items:center; gap:8px; margin-top:8px; }
+    .source-ctrl-row:first-child { margin-top:0; }
+    .source-ctrl-btn-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .source-ctrl-btn-grid .btn { padding:12px 6px; }
+    /* PAN JOYSTICK — replaces the old arrow d-pad (spec 3). A single circular
+       drag surface with a centered knob; setupSourceJoystick() in the script
+       positions the knob via inline transform while dragging and springs it
+       back to dead-center on release (clear rest position = "not panning").
+       touch-action:none keeps the drag gesture from ever being interpreted as
+       a page/list scroll. */
+    .joystick-wrap { display:flex; justify-content:center; margin-top:12px; }
+    .joystick-base { position:relative; width:112px; height:112px; border-radius:50%; background:var(--bg3); border:1.5px solid var(--border); touch-action:none; flex-shrink:0; }
+    .joystick-base.dragging { border-color:var(--accent); }
+    .joystick-knob { position:absolute; left:50%; top:50%; width:46px; height:46px; border-radius:50%; background:var(--accent2); border:2px solid var(--accent3); transform:translate(-50%,-50%); box-shadow:0 3px 10px rgba(0,0,0,.35); pointer-events:none; }
+    .joystick-base.dragging .joystick-knob { background:var(--accent); }
+    .joystick-arrow { position:absolute; width:13px; height:13px; color:var(--text2); pointer-events:none; opacity:.6; }
+    .joystick-arrow-up { top:6px; left:50%; transform:translateX(-50%); }
+    .joystick-arrow-down { bottom:6px; left:50%; transform:translateX(-50%); }
+    .joystick-arrow-left { left:6px; top:50%; transform:translateY(-50%); }
+    .joystick-arrow-right { right:6px; top:50%; transform:translateY(-50%); }
+    /* Image Collection slide strip — horizontal scroll ONLY here (spec 5.v/12) */
+    .collection-slide-strip { display:flex; gap:8px; overflow-x:auto; overflow-y:hidden; padding:4px 2px 8px; -webkit-overflow-scrolling:touch; }
+    .collection-slide-btn { flex:0 0 auto; width:48px; height:48px; border-radius:9px; border:2px solid var(--border); background:var(--bg3); color:var(--text2); font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; position:relative; }
+    .collection-slide-btn img { width:100%; height:100%; object-fit:cover; position:absolute; inset:0; }
+    /* PPTX thumbnails render real scaled DOM/SVG (not a raster <img> like the
+       PDF/Image-Collection strips), so they get a plain absolute-fill slot to
+       render into instead — see PptxEngine.renderThumbInto()/_wirePptxThumbs(). */
+    .collection-slide-thumb-slot { position:absolute; inset:0; overflow:hidden; background:#fff; }
+    .collection-slide-btn span { position:relative; z-index:1; background:rgba(0,0,0,.55); border-radius:5px; padding:1px 4px; color:#fff; }
+    .collection-slide-btn.active { border-color:var(--accent); box-shadow:0 0 0 2px rgba(155,89,182,.35); }
+    /* Video transport */
+    .video-time-row { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--text2); font-family:monospace; margin-top:8px; }
+    .video-time-row input[type=range] { flex:1; min-width:0; accent-color:var(--accent); }
+    .video-transport-row { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:10px; }
+    .video-transport-row .icon-btn { width:42px; height:42px; }
+    .video-transport-row .icon-btn svg { width:18px; height:18px; }
+    .video-transport-row .icon-btn.play-pause { width:52px; height:52px; background:var(--accent2); border-color:var(--accent); color:#fff; }
+    .video-transport-row .icon-btn.play-pause svg { width:22px; height:22px; }
 
     /* TOAST — small, non-blocking, auto-dismissing notice. Mirrors index.html's
        own #toast/toast()/toastWarn() exactly (same shape, same warning icon) so
@@ -779,6 +856,33 @@
       <div class="sources-section-label">Idle Screens</div>
       <div id="sources-list-idle" style="padding:0 10px 10px;display:flex;flex-direction:column;gap:8px;"></div>
     </div>
+
+    <!-- Source Controls — side panel opened by a right-to-left swipe on a source
+         card (see setupSourceCardGestures()/openSourceControls()). Belongs
+         exclusively to the Sources panel — lives inside #panel-sources AND is
+         CSS position:absolute (not fixed) against it (see #panel-sources{
+         position:relative}/.source-ctrl-overlay in the CSS), so it is visually
+         contained and clipped to that panel's own box (never covering the
+         header, tabs, monitor stage, transfer bar, or another Cast Control
+         panel) and can never be reached/left open from another tab. Body
+         content is rebuilt per source TYPE by renderSourceControlBody() — a
+         reusable dispatcher, not one giant handler — so new source types/
+         controls can be added later without touching this shell. Never
+         presents/selects the source; it only edits that source's own stored
+         settings. -->
+    <div class="source-ctrl-overlay" id="source-ctrl-overlay" onclick="if(event.target===this)closeSourceControls();">
+      <div class="source-ctrl-panel">
+        <div class="source-ctrl-header">
+          <div class="source-ctrl-header-thumb" id="source-ctrl-thumb"></div>
+          <div class="source-ctrl-header-info">
+            <div class="source-ctrl-header-name" id="source-ctrl-name"></div>
+            <div class="source-ctrl-header-type" id="source-ctrl-type"></div>
+          </div>
+          <button class="icon-btn" onclick="closeSourceControls()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="source-ctrl-body" id="source-ctrl-body"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Small reusable text-input modal (Rename Source) -->
@@ -807,8 +911,9 @@
       </div>
       <div class="add-source-body">
         <div class="add-source-section-label">Media / File</div>
-        <div class="source-type-grid">
+        <div class="source-type-grid" style="grid-template-columns:repeat(3,1fr);">
           <button type="button" class="source-type-btn" data-type="image" onclick="selectNewSourceType('image')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Image</button>
+          <button type="button" class="source-type-btn" data-type="imageCollection" onclick="selectNewSourceType('imageCollection')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="15" height="15" rx="2"/><path d="M7 2h13a2 2 0 0 1 2 2v13"/><circle cx="7.5" cy="10.5" r="1.2"/><polyline points="20 15 15 10 4 20"/></svg>Image Collection</button>
           <button type="button" class="source-type-btn" data-type="video" onclick="selectNewSourceType('video')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>Video</button>
           <button type="button" class="source-type-btn" data-type="pdf" onclick="selectNewSourceType('pdf')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/><line x1="9" y1="11" x2="12" y2="11"/></svg>PDF</button>
           <button type="button" class="source-type-btn" data-type="ppt" onclick="selectNewSourceType('ppt')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>PowerPoint</button>
@@ -1110,19 +1215,49 @@
   // heads-up alongside it, via the SAME small/non-blocking toast used elsewhere
   // in this file, throttled so rapid refocusing never spams multiple copies of
   // the same message.
+  //
+  // Android exposes no queryable API for whether the user has already tapped
+  // "Allow" on that mirroring-keyboard notification, so this only warns while
+  // BOTH (1) the user is actually attempting to focus a text field AND (2) it
+  // hasn't already been shown to work — never just hidden after one display
+  // regardless of outcome. "Already granted" is determined from the one real,
+  // observable signal available in JS: the WebView's visualViewport height
+  // actually shrinking right after a focus attempt means the on-screen
+  // keyboard genuinely opened, which can only happen once access has been
+  // allowed — see the visualViewport listener below. That result is persisted
+  // (same save()/load() mechanism as everything else in this file) so it's
+  // learned once, ever, per install rather than re-warning every session.
   // ============================================================
   var _lastKeyboardWarnAt=0;
+  var _keyboardMirrorAllowed=load('castKeyboardMirrorAllowed',false);
+  var _keyboardWarnPendingSince=0, _keyboardHeightAtFocus=0;
   function castingKeyboardWarn(){
     var casting=false;
     try{if(window.Android&&typeof window.Android.isMirroring==='function')casting=window.Android.isMirroring();}catch(e){}
     if(!casting)return false;
+    if(_keyboardMirrorAllowed)return true; // already confirmed working on this device — never warn again
+    _keyboardHeightAtFocus=(window.visualViewport&&window.visualViewport.height)||window.innerHeight;
+    _keyboardWarnPendingSince=Date.now();
     var now=Date.now();
-    if(now-_lastKeyboardWarnAt<4000)return true; // already warned recently — don't spam
+    if(now-_lastKeyboardWarnAt<4000)return true; // toast itself is throttled — still watching for the keyboard actually opening below
     _lastKeyboardWarnAt=now;
-    toastWarn('Keyboard unavailable while casting — check the notification bar to allow it.');
+    toastWarn('Allow On-Screen Keyboard to use Mobile Keyboard  — check the notification bar to allow it.');
     if(navigator.vibrate)navigator.vibrate(200);
     return true;
   }
+  (function(){
+    if(!window.visualViewport)return; // no detector available — falls back to always warning (safe default)
+    window.visualViewport.addEventListener('resize',function(){
+      if(_keyboardMirrorAllowed||!_keyboardWarnPendingSince)return;
+      if(Date.now()-_keyboardWarnPendingSince>6000){_keyboardWarnPendingSince=0;return;} // too far from any focus attempt to mean anything
+      var shrink=_keyboardHeightAtFocus-window.visualViewport.height;
+      if(shrink>120){ // a real on-screen keyboard opening, not a rotation/resize blip
+        _keyboardMirrorAllowed=true;
+        save('castKeyboardMirrorAllowed',true);
+        _keyboardWarnPendingSince=0;
+      }
+    });
+  })();
   // A single delegated listener covers every text input/textarea in this
   // document — including ones created later via innerHTML (Add Source's name
   // field, the Bible picker's search box, etc.) — instead of wiring onfocus
@@ -1363,7 +1498,7 @@
   // so that ONE screen change is flagged instant to presenter.html without ever
   // touching fadeSettings (the persistent, user-configured Transition settings).
   var _instantTransferInFlight=false;
-  function _isPresenterScreenCall(fnName){return fnName==='showContent'||fnName==='showGap'||fnName==='clearDisplay'||fnName==='showSplit'||fnName==='showCamera'||fnName==='showPdf'||fnName==='clearOverlay';}
+  function _isPresenterScreenCall(fnName){return fnName==='showContent'||fnName==='showGap'||fnName==='clearDisplay'||fnName==='showSplit'||fnName==='showCamera'||fnName==='showPdf'||fnName==='showPptx'||fnName==='clearOverlay';}
 
   function _runFrameCall(iframeId,fnName,args){
     try{
@@ -1374,6 +1509,45 @@
       }
     }catch(e){}
     return false;
+  }
+  // Same-origin read (unlike _runFrameCall, returns the callee's actual return
+  // value) — used only to poll presenter.html's getVideoStatus() while a
+  // Video source's control panel is open (see renderVideoControls()).
+  function _readFrameValue(iframeId,fnName,args){
+    try{
+      var ifrm=document.getElementById(iframeId);
+      if(ifrm&&ifrm.contentWindow&&typeof ifrm.contentWindow[fnName]==='function'){
+        return ifrm.contentWindow[fnName].apply(null,args||[]);
+      }
+    }catch(e){}
+    return null;
+  }
+  // Forwards one Source Controls style/runtime call (see presenter.html's
+  // SOURCE CONTROLS RUNTIME) to the real external cast display via the
+  // generic Android.sourceCommand() passthrough — mirrors what presenterCall
+  // already does for the local Live iframe. No-ops harmlessly when there's no
+  // Android bridge (desktop/browser preview) or nothing currently connected.
+  function _androidSourceCommand(fnName,args){
+    if(window.Android&&typeof window.Android.sourceCommand==='function'){
+      try{window.Android.sourceCommand(fnName,JSON.stringify(args||[]));}catch(e){}
+    }
+  }
+  // ---- Source Controls runtime updates — the ONE path every control in the
+  // side panel (Display Mode, Frame Ratio, Zoom/Pan, Video transport, Clock
+  // style, …) uses to push a change onto whatever is CURRENTLY showing this
+  // source. It only ever restyles/operates on already-shown content (never
+  // _isPresenterScreenCall fnNames), so it can never itself select/present a
+  // source — see the spec's "opening source controls must never accidentally
+  // present the source live" requirement. If the source isn't currently in
+  // Preview or Live at all, this simply does nothing visible; the caller is
+  // still responsible for saving the setting on the source object itself so
+  // it applies correctly whenever the source IS next staged/presented. ----
+  function _sourceRuntimeCall(id,fnName,args){
+    if(_isSourcePreview(id))previewCall(fnName,args);
+    if(_isSourceLive(id)){
+      presenterCall(fnName,args);
+      _androidSourceCommand(fnName,args);
+    }
   }
 
   // Pushes the currently-selected Preview → Live Transition (see fadeSettings/
@@ -1402,9 +1576,24 @@
     }
   }
 
+  // Source Controls style fnNames (presenter.html's SOURCE CONTROLS RUNTIME) —
+  // cached by presenterCall/previewCall (keyed by fnName, most-recent wins) so
+  // replayPresenterPreview()/replayPreviewFrame() can re-apply them after an
+  // iframe reload, same idea as _lastPresenterCall/_lastPreviewCall above.
+  // 'videoControl' is deliberately NOT cached here — it's a one-shot transport
+  // action (play/pause/seek), not a persistent style, so a reload simply
+  // leaves a reloaded video paused at its first frame rather than guessing.
+  var _SOURCE_STYLE_FNS=['setSourceFrame','setSourceZoom','setVideoEndBehavior','setClockStyle'];
+  function _cacheStyleCall(list,fnName,args){
+    if(_SOURCE_STYLE_FNS.indexOf(fnName)<0)return;
+    for(var i=list.length-1;i>=0;i--)if(list[i].fnName===fnName){list.splice(i,1);break;}
+    list.push({fnName:fnName,args:args.slice()});
+  }
+
   // ---- LIVE iframe (program out — mirrors the real audience display) ----
   var _lastPresenterCall=null;
   var _lastPresenterFontSize=null;
+  var _lastPresenterStyleCalls=[];
   function presenterCall(fnName,args){
     args=_copyArgs(args);
     if(_isPresenterScreenCall(fnName)){
@@ -1412,6 +1601,7 @@
       _syncFrameTransition('presenter-iframe');
       _syncAndroidTransition(); // goLive()/pushSplitToPresenter() always call presenterCall alongside the real Android bridge call
     }
+    _cacheStyleCall(_lastPresenterStyleCalls,fnName,args);
     if(fnName==='updateFontSize'&&args.length)_lastPresenterFontSize=args[0];
     return _runFrameCall('presenter-iframe',fnName,args);
   }
@@ -1433,24 +1623,35 @@
       try{ _syncFrameTransition('presenter-iframe'); } finally { _instantTransferInFlight=prevInstant; }
       _runFrameCall('presenter-iframe',_lastPresenterCall.fnName,_lastPresenterCall.args.slice());
       if(_lastPresenterFontSize!==null)_runFrameCall('presenter-iframe','updateFontSize',[_lastPresenterFontSize]);
+      _lastPresenterStyleCalls.forEach(function(c){_runFrameCall('presenter-iframe',c.fnName,c.args.slice());});
     }
   }
   function initPresenterPreview(){
     var ifrm=document.getElementById('presenter-iframe');
     if(!ifrm)return;
-    ifrm.addEventListener('load',function(){setTimeout(replayPresenterPreview,50);});
+    // __frameRole tells THIS presenter.html instance which surface it is —
+    // read back by its own 'ended' video listener (see setupVideoEndedBridge
+    // pattern in presenter.html) so __onSourceVideoEnded below knows whether
+    // the Live or Preview surface reached the end of a video.
+    try{if(ifrm.contentWindow)ifrm.contentWindow.__frameRole='live';}catch(e){}
+    ifrm.addEventListener('load',function(){
+      try{if(ifrm.contentWindow)ifrm.contentWindow.__frameRole='live';}catch(e){}
+      setTimeout(replayPresenterPreview,50);
+    });
     setTimeout(replayPresenterPreview,300);
   }
 
   // ---- PREVIEW iframe (the real preview surface: select → preview → review → go live) ----
   var _lastPreviewCall=null;
   var _lastPreviewFontSize=null;
+  var _lastPreviewStyleCalls=[];
   function previewCall(fnName,args){
     args=_copyArgs(args);
     if(_isPresenterScreenCall(fnName)){
       _lastPreviewCall={fnName:fnName,args:args.slice()};
       _syncFrameTransition('preview-iframe');
     }
+    _cacheStyleCall(_lastPreviewStyleCalls,fnName,args);
     if(fnName==='updateFontSize'&&args.length)_lastPreviewFontSize=args[0];
     return _runFrameCall('preview-iframe',fnName,args);
   }
@@ -1463,14 +1664,46 @@
       try{ _syncFrameTransition('preview-iframe'); } finally { _instantTransferInFlight=prevInstant; }
       _runFrameCall('preview-iframe',_lastPreviewCall.fnName,_lastPreviewCall.args.slice());
       if(_lastPreviewFontSize!==null)_runFrameCall('preview-iframe','updateFontSize',[_lastPreviewFontSize]);
+      _lastPreviewStyleCalls.forEach(function(c){_runFrameCall('preview-iframe',c.fnName,c.args.slice());});
     }
   }
   function initPreviewFrame(){
     var ifrm=document.getElementById('preview-iframe');
     if(!ifrm)return;
-    ifrm.addEventListener('load',function(){setTimeout(replayPreviewFrame,50);});
+    try{if(ifrm.contentWindow)ifrm.contentWindow.__frameRole='preview';}catch(e){}
+    ifrm.addEventListener('load',function(){
+      try{if(ifrm.contentWindow)ifrm.contentWindow.__frameRole='preview';}catch(e){}
+      setTimeout(replayPreviewFrame,50);
+    });
     setTimeout(replayPreviewFrame,300);
   }
+  // ---- Video "After Video Ends" = Present Another Source (spec 4.iv) ----
+  // presenter.html's <video ended> listener calls this directly (same-origin
+  // contentWindow, no Android bridge needed) — see the module comment there
+  // for why "Present Another Source" is driven from the local mirror iframes
+  // instead of a native Android callback (the real external cast display's
+  // OWN video will independently reach its own end at essentially the same
+  // moment, since both were started by the same goLive() call). role is
+  // 'live' or 'preview' (see __frameRole above); 'stop' behavior needs no
+  // handling here — there's simply nothing further to do when it ends.
+  window.__onSourceVideoEnded=function(role){
+    var slot=(role==='live')?ctrlState.live:(role==='preview')?ctrlState.preview:null;
+    if(!slot||slot.kind!=='source')return;
+    var s=findSource(slot.sourceId);
+    if(!s||s.type!=='video'||s.endBehavior!=='presentSource'||!s.endTargetId)return;
+    var target=findSource(s.endTargetId);
+    if(!target)return;
+    if(role==='live')sendSourceLive(s.endTargetId);
+    else stageSourceToPreview(s.endTargetId);
+  };
+  // Reached by presenter.html's PDF/PPTX renderer (Preview/Live mirror
+  // iframes only — the real external cast display has no parent to call
+  // back to) when a page/slide fails to render — see ERROR HANDLING: this is
+  // the one path that turns a rendering failure into a visible toast instead
+  // of a silent blank frame.
+  window.__onSourceRenderError=function(role,message){
+    toastWarn(message||'Rendering failed');
+  };
 
   // ============================================================
   // PRESENT NOW — Songs and normal Bible present immediately, straight to
@@ -1510,6 +1743,21 @@
   // Preview's last content onto Live) — the original behavior for those.
   function goLive(payload){
     var s=payload||ctrlState.preview;if(!s)return;
+    // LIVE TRANSITION EFFECT "Resume video" (spec 4) needs the elapsed time
+    // captured BEFORE presenterCall() below overwrites Live's <video> with a
+    // fresh src (which always restarts playback at 0) — read from wherever
+    // this source is already playing (Preview, if staged there), so Live can
+    // be seeked to match instead of restarting. Must happen up here, before
+    // the general presenterCall/Android call that follows.
+    var _videoResumeTime=null;
+    if(s.kind==='source'){
+      var _srcForResume=findSource(s.sourceId);
+      if(_srcForResume&&_srcForResume.type==='video'&&_srcForResume.playAfter==='resume'&&
+         ctrlState.preview&&ctrlState.preview.kind==='source'&&ctrlState.preview.sourceId===s.sourceId){
+        var _pvSt=_readFrameValue('preview-iframe','getVideoStatus',[]);
+        if(_pvSt)_videoResumeTime=_pvSt.currentTime||0;
+      }
+    }
     // Force the transition category from s.kind itself — the one thing we
     // know for certain here — instead of letting _currentTransitionCategory()
     // guess from ctrlState.preview (which, for a direct explicit payload, may
@@ -1539,6 +1787,49 @@
     } else if(s.kind==='source'){
       ctrlState.live={kind:'source',sourceId:s.sourceId};
       updateScreenIndicator('source',s.indicatorDetail);
+      // Push this source's own saved presentation style (Display Mode/Frame
+      // Ratio/Zoom-Pan/end-behavior/Clock style — see _sourceStyleCalls) to
+      // the now-live surface, exactly like stageSourceToPreview() already
+      // does for Preview, so a source picks up its own settings the instant
+      // it goes live too — not just while it was sitting in Preview.
+      var liveSrc=findSource(s.sourceId);
+      if(liveSrc){
+        _pushSourceStyle(presenterCall,liveSrc);
+        _sourceStyleCalls(liveSrc).forEach(function(c){_androidSourceCommand(c[0],c[1]);});
+        // LIVE TRANSITION EFFECT (spec 4) — Preview and Live are always two
+        // separate <video> elements (two separate iframe documents), so "one
+        // logical timeline" here means keeping them numerically aligned at
+        // every point they'd otherwise diverge, not literally one DOM element:
+        //   'start'  — both surfaces seek to 0 and play, from this moment.
+        //   'resume' — both surfaces seek to the position Preview was already
+        //              at (captured above, before Live's src was replaced)
+        //              and play, so Live picks up exactly where Preview left
+        //              off instead of restarting.
+        //   'manual' — neither surface is touched here at all; the operator
+        //              starts/stops playback explicitly via the transport
+        //              controls, which already fan out to both surfaces
+        //              together (see videoAction()/_sourceRuntimeCall()), so
+        //              they still never drift apart once the operator DOES
+        //              press Play.
+        // (Ongoing frame-by-frame drift between two independently-decoding
+        // <video> elements over long playback isn't correctable without a
+        // shared media source, which this architecture doesn't have — every
+        // explicit action stays aligned; this doesn't add a continuous
+        // background re-sync poll, which would be a much larger, riskier
+        // change than what was asked for here.)
+        if(liveSrc.type==='video'&&liveSrc.playAfter!=='manual'){
+          var seekTime=(liveSrc.playAfter==='resume'&&_videoResumeTime!=null)?_videoResumeTime:0;
+          presenterCall('videoControl',['seekTo',seekTime]);
+          _androidSourceCommand('videoControl',['seekTo',seekTime]);
+          presenterCall('videoControl',['play']);
+          _androidSourceCommand('videoControl',['play']);
+          if(ctrlState.preview&&ctrlState.preview.kind==='source'&&ctrlState.preview.sourceId===liveSrc.id){
+            previewCall('videoControl',['seekTo',seekTime]);
+            previewCall('videoControl',['play']);
+          }
+        }
+        if(liveSrc.type==='imageCollection')_maybeStartCollectionAutoPlay(liveSrc);
+      }
       renderSourcesList();
     }
   }
@@ -2054,19 +2345,71 @@
   // serialize are saved; a camera's live MediaStream can't be (and shouldn't
   // be) persisted, so a reloaded camera source simply starts "Not connected"
   // until the user taps Reconnect again.
+  // Extensible Frame Ratio list (spec 3.ii/4.iii/5.iii) — add future ratios
+  // here only; every dropdown/menu that offers frame ratio reads from this
+  // one array via frameRatioOptionsHTML() rather than hardcoding options.
+  var FRAME_RATIO_OPTIONS=[{v:'auto',label:'Original / Auto'},{v:'1:1',label:'1:1'},{v:'4:3',label:'4:3'},{v:'16:9',label:'16:9'},{v:'16:10',label:'16:10'},{v:'21:9',label:'21:9'}];
+  var DISPLAY_MODE_OPTIONS=[{v:'fullscreen',label:'Fullscreen'},{v:'fit',label:'Best Fit'},{v:'cover',label:'Covered'}];
+  function _defaultMediaSettings(){return {displayMode:'fit',frameRatio:'auto',zoom:1,panX:0,panY:0};}
+  // The app's own default slideshow pace for a newly-added Image Collection —
+  // a single sensible constant (spec 5.i: "do not introduce unnecessary global
+  // timing settings"), not a user-configurable global option.
+  var COLLECTION_SLIDE_INTERVAL_MS=4000;
+
   function saveSourcesState(){
     var persistable=sourcesState.items.filter(function(s){return !s.builtin;}).map(function(s){
       var copy={id:s.id,type:s.type,name:s.name};
       if(s.dataUrl!=null)copy.dataUrl=s.dataUrl;
       if(s.fileMeta)copy.fileMeta=s.fileMeta;
       if(s.deviceId)copy.deviceId=s.deviceId;
+      if(s.settings)copy.settings=s.settings;
+      if(s.type==='video'){copy.endBehavior=s.endBehavior;copy.endTargetId=s.endTargetId;copy.playAfter=s.playAfter;}
+      if(s.type==='imageCollection'){copy.images=s.images;copy.currentIndex=s.currentIndex;copy.autoPlay=s.autoPlay;}
+      if(s.type==='pdf'){copy.currentPage=s.currentPage;}
+      if(s.type==='ppt'){copy.currentSlide=s.currentSlide;}
       return copy;
     });
     save('castSources',persistable);
+    // Builtin sources (Clock/Blank) are always re-created fresh by
+    // _builtinIdleSources() on load — they're never in the array above — but
+    // their own per-source settings (Clock font color/size, spec 8) still need
+    // to survive a reload, so they're kept in one small separate bucket under
+    // the SAME save()/load() mechanism (just a second localStorage key, same
+    // pattern as castTabAppearance/castFadeSettings already use) and merged
+    // back onto the fresh builtins in loadSourcesState() below.
+    var builtinSettings={};
+    sourcesState.items.filter(function(s){return s.builtin;}).forEach(function(s){
+      if(s.type==='idle_clock')builtinSettings.idle_clock={fontColor:s.fontColor,fontSize:s.fontSize};
+    });
+    save('castSourcesBuiltin',builtinSettings);
   }
   function loadSourcesState(){
     var saved=load('castSources',[]);
+    var builtinSettings=load('castSourcesBuiltin',{});
     sourcesState.items=_builtinIdleSources().concat(saved);
+    sourcesState.items.forEach(function(s){
+      if(s.builtin&&builtinSettings[s.type]){
+        for(var k in builtinSettings[s.type])if(builtinSettings[s.type].hasOwnProperty(k))s[k]=builtinSettings[s.type][k];
+      }
+      if((s.type==='image'||s.type==='video'||s.type==='imageCollection'||s.type==='pdf'||s.type==='ppt')&&!s.settings)s.settings=_defaultMediaSettings();
+      // Legacy migration: this feature's very first "Play video after" control
+      // (Transition/Present Current Preview Window) only ever shipped within
+      // this same development cycle — no released install to preserve compat
+      // for — so any value that isn't one of the current three LIVE TRANSITION
+      // EFFECT options just falls back to 'start' (== the app's original
+      // always-plays-immediately-from-0 behavior).
+      if(s.type==='video'){
+        if(!s.endBehavior)s.endBehavior='loop';
+        if(['start','resume','manual'].indexOf(s.playAfter)<0)s.playAfter='start';
+      }
+      if(s.type==='imageCollection'){if(!s.images)s.images=[];if(s.currentIndex==null)s.currentIndex=0;}
+      // Page/slide counts are real now (pdfjs-dist/@aiden0z/pptx-renderer —
+      // see lib/renderers/) and computed live via PdfCtrl/PptxCtrl once the
+      // file is (re)parsed, never trusted from storage; only the CURRENT
+      // page/slide position is worth persisting.
+      if(s.type==='pdf'){if(!s.currentPage)s.currentPage=1;}
+      if(s.type==='ppt'){if(s.currentSlide==null)s.currentSlide=0;}
+    });
     saved.forEach(function(s){
       var n=parseInt(String(s.id).replace('src-',''),10);
       if(isFinite(n)&&n>=_sourceIdSeq)_sourceIdSeq=n+1;
@@ -2078,21 +2421,23 @@
   function _isSourcePreview(id){return !!(ctrlState.preview&&ctrlState.preview.kind==='source'&&ctrlState.preview.sourceId===id);}
 
   function sourceTypeLabel(type){
-    return {idle_clock:'Clock',idle_blank:'Blank',image:'Image',video:'Video',pdf:'PDF',ppt:'PowerPoint',camera:'Camera / Capture'}[type]||type;
+    return {idle_clock:'Clock',idle_blank:'Blank',image:'Image',imageCollection:'Image Collection',video:'Video',pdf:'PDF',ppt:'PowerPoint',camera:'Camera / Capture'}[type]||type;
   }
   function sourceStatusText(s){
-    if(s.type==='image'||s.type==='video'||s.type==='pdf')return s.fileMeta?s.fileMeta.name:'No file';
-    if(s.type==='ppt')return s.fileMeta?(s.fileMeta.name+' — preview/casting unsupported'):'No file';
+    if(s.type==='image'||s.type==='video'||s.type==='pdf'||s.type==='ppt')return s.fileMeta?s.fileMeta.name:'No file';
+    if(s.type==='imageCollection')return (s.images&&s.images.length)?(s.images.length+' image'+(s.images.length===1?'':'s')):'No images';
     if(s.type==='camera')return s.stream?'Connected':'Not connected';
     return '';
   }
   function sourceThumbHTML(s){
     if(s.type==='image'&&s.dataUrl)return '<img src="'+s.dataUrl+'" alt="">';
+    if(s.type==='imageCollection'&&s.images&&s.images.length)return '<img src="'+s.images[Math.min(s.currentIndex||0,s.images.length-1)].dataUrl+'" alt="">';
     if(s.type==='video'&&s.dataUrl)return '<video muted playsinline src="'+s.dataUrl+'"></video>';
     var icons={
       idle_clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
       idle_blank:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>',
       image:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>',
+      imageCollection:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="15" height="15" rx="2"/><path d="M7 2h13a2 2 0 0 1 2 2v13"/><circle cx="7.5" cy="10.5" r="1.2"/><polyline points="20 15 15 10 4 20"/></svg>',
       video:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>',
       pdf:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/><line x1="9" y1="11" x2="12" y2="11"/></svg>',
       ppt:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>',
@@ -2109,6 +2454,7 @@
     var user=sourcesState.items.filter(function(s){return !s.builtin;});
     idleWrap.innerHTML=idle.map(renderSourceCard).join('');
     userWrap.innerHTML=user.length?user.map(renderSourceCard).join(''):'<div class="empty-state" style="padding:20px 12px;"><p>No sources added yet. Tap "Add Source" to import media or connect a device.</p></div>';
+    _syncCollectionTimers();
   }
 
   // Tapping the card is now the only per-source interaction: it stages the
@@ -2118,8 +2464,12 @@
   // openManageSourcesModal), which requires an explicit confirmation to remove.
   function renderSourceCard(s){
     var live=_isSourceLive(s.id),preview=!live&&_isSourcePreview(s.id);
-    var unusable=(s.type==='ppt')||(s.type==='camera'&&!s.stream)||((s.type==='image'||s.type==='video'||s.type==='pdf')&&!s.dataUrl);
-    return '<div class="source-card'+(live?' is-live':preview?' is-preview':'')+(unusable?' source-card-unusable':'')+'"'
+    var unusable=(s.type==='camera'&&!s.stream)||((s.type==='image'||s.type==='video'||s.type==='pdf'||s.type==='ppt')&&!s.dataUrl)||(s.type==='imageCollection'&&(!s.images||!s.images.length));
+    // data-source-id is read by setupSourceCardGestures()'s swipe handling
+    // (right-to-left swipe opens this card's Source Controls side panel) —
+    // the tap-to-stage onclick below is completely untouched by that gesture
+    // code; a real swipe suppresses the click that would otherwise follow it.
+    return '<div class="source-card'+(live?' is-live':preview?' is-preview':'')+(unusable?' source-card-unusable':'')+'" data-source-id="'+s.id+'"'
       +(unusable?'':' onclick="stageSourceToPreview(\''+s.id+'\')"')+'>'
       +'<div class="source-thumb">'+sourceThumbHTML(s)+'</div>'
       +'<div class="source-info">'
@@ -2139,15 +2489,133 @@
     if(s.type==='idle_clock')return {presenterFn:'showGap',presenterArgs:['clock','',bg,fg,fs],androidFn:'showGap',androidArgs:['clock','',bg,fg,fs]};
     if(s.type==='idle_blank')return {presenterFn:'showGap',presenterArgs:['blank','',bg,fg,fs],androidFn:'showGap',androidArgs:['blank','',bg,fg,fs]};
     if(s.type==='image'&&s.dataUrl)return {presenterFn:'showGap',presenterArgs:['image',s.dataUrl,'#000000',fg,fs],androidFn:'showGap',androidArgs:['image',s.dataUrl,'#000000',fg,fs]};
+    // Image Collection reuses the existing 'image' Sources renderer as-is —
+    // it's just whichever image in the collection is currentIndex — so no
+    // presenter.html/Android bridge changes were needed to show one.
+    if(s.type==='imageCollection'&&s.images&&s.images.length){
+      var img=s.images[Math.min(s.currentIndex||0,s.images.length-1)].dataUrl;
+      return {presenterFn:'showGap',presenterArgs:['image',img,'#000000',fg,fs],androidFn:'showGap',androidArgs:['image',img,'#000000',fg,fs]};
+    }
     if(s.type==='video'&&s.dataUrl)return {presenterFn:'showGap',presenterArgs:['video',s.dataUrl,'#000000',fg,fs],androidFn:'showGap',androidArgs:['video',s.dataUrl,'#000000',fg,fs]};
-    if(s.type==='pdf'&&s.dataUrl)return {presenterFn:'showPdf',presenterArgs:[s.dataUrl],androidFn:'showPdf',androidArgs:[s.dataUrl]};
+    // PDF/PPTX — s.currentPage/s.currentSlide are the single source of truth
+    // for Prev/Next, the rendered thumbnail strip, AND what's sent to
+    // Preview/Live, so none of those three can ever drift out of sync.
+    // Rendering itself is real (pdfjs-dist/@aiden0z/pptx-renderer — see
+    // presenter.html's showPdf()/showPptx()); the dataUrl+page/slide pair is
+    // the whole call, no URL-fragment tricks needed any more.
+    if(s.type==='pdf'&&s.dataUrl)return {presenterFn:'showPdf',presenterArgs:[s.dataUrl,s.currentPage||1],androidFn:'showPdf',androidArgs:[s.dataUrl,s.currentPage||1]};
+    if(s.type==='ppt'&&s.dataUrl)return {presenterFn:'showPptx',presenterArgs:[s.dataUrl,s.currentSlide||0],androidFn:'showPptx',androidArgs:[s.dataUrl,s.currentSlide||0]};
     if(s.type==='camera'&&s.stream)return {presenterFn:'showCamera',presenterArgs:[s.stream],androidFn:null,androidArgs:null};
-    return null; // ppt (no renderer) and not-yet-connected sources are not sent to air
+    return null; // not-yet-connected sources are not sent to air
   }
+  // ---- Presentation STYLE (never WHICH content) for a source — Display
+  // Mode/Frame Ratio/Zoom-Pan (Image/Video/Image Collection/PDF), end-behavior
+  // (Video), and Clock font color/size. Applied (a) once right after every
+  // stage/goLive so freshly-shown content immediately reflects its own saved
+  // settings, and (b) again from the Source Controls panel whenever a control
+  // changes — via _sourceRuntimeCall() below, which never touches
+  // ctrlState.live/preview and so can never accidentally present anything. ----
+  function _sourceStyleCalls(s){
+    var calls=[];
+    if(s.type==='image'||s.type==='video'||s.type==='imageCollection'||s.type==='pdf'||s.type==='ppt'){
+      var st=s.settings||_defaultMediaSettings();
+      calls.push(['setSourceFrame',[st.displayMode,st.frameRatio]]);
+      calls.push(['setSourceZoom',[st.zoom,st.panX,st.panY]]);
+    }
+    if(s.type==='video')calls.push(['setVideoEndBehavior',[s.endBehavior||'loop']]);
+    if(s.type==='idle_clock')calls.push(['setClockStyle',[s.fontColor||null,s.fontSize||null]]);
+    return calls;
+  }
+  // Runs fn(name,args) (previewCall/presenterCall) for every style call of s —
+  // shared by stageSourceToPreview/goLive's initial "just staged" push and by
+  // _sourceRuntimeCall's live-editing push, so there is exactly one place that
+  // knows what "this source's style" consists of.
+  function _pushSourceStyle(fn,s){_sourceStyleCalls(s).forEach(function(c){fn(c[0],c[1]);});}
+  // Video autoplay is handled explicitly (see presenter.html's <video>, which
+  // deliberately has no autoplay attribute any more) rather than always-on.
+  // Staging to Preview always autoplays immediately for review UNLESS the
+  // LIVE TRANSITION EFFECT is 'manual' (spec 4 — "do not automatically start/
+  // restart... allow the user to control playback manually", starting from
+  // the moment it's staged, not just at the live transition). 'start'/
+  // 'resume' both autoplay in Preview — what differs between them is only
+  // what happens to Live's own timeline at the actual transition moment, see
+  // goLive()'s source branch.
+  function _applyVideoPlayAfterStage(fn,s){
+    if(!s||s.type!=='video')return;
+    fn('videoControl',[(s.playAfter==='manual')?'pause':'play']);
+  }
+
+  // Re-pushes just WHICH content a source shows (e.g. an Image Collection's
+  // current slide) to wherever it's currently displayed, without re-staging/
+  // re-presenting it — used by the slide buttons and Auto Slide Play so
+  // switching slides never moves a source that's merely sitting untouched in
+  // the list into Preview, and never re-triggers a fresh "just selected" cue.
+  function _refreshSourceDisplay(id){
+    var s=findSource(id);if(!s)return;
+    var call=_sourcePresenterCall(s);if(!call)return;
+    if(_isSourcePreview(id)){
+      ctrlState.preview.presenterArgs=call.presenterArgs;
+      previewCall(call.presenterFn,call.presenterArgs);
+    }
+    if(_isSourceLive(id)){
+      presenterCall(call.presenterFn,call.presenterArgs);
+      if(call.androidFn&&window.Android&&typeof window.Android[call.androidFn]==='function')window.Android[call.androidFn].apply(window.Android,call.androidArgs);
+    }
+    renderSourcesList();
+  }
+
+  // ---- Image Collection Auto Slide Play (spec 5.i) — one setInterval per
+  // collection source, running ONLY while that source is actually on Preview
+  // or Live (never in the background for a source nobody's looking at) and
+  // only while its own autoPlay flag is on. Swept from renderSourcesList()
+  // (called after essentially every state change that could start/stop a
+  // source being shown), so there's exactly one place that starts/stops
+  // timers rather than trying to hook every individual call site. ----
+  var _collectionTimers={};
+  function _stopCollectionAutoPlay(id){
+    if(_collectionTimers[id]){clearInterval(_collectionTimers[id]);delete _collectionTimers[id];}
+  }
+  function _collectionAdvance(id){
+    var s=findSource(id);
+    if(!s||s.type!=='imageCollection'||!s.images||!s.images.length)return;
+    s.currentIndex=(s.currentIndex+1)%s.images.length;
+    saveSourcesState();
+    _refreshSourceDisplay(id);
+    if(_activeControlSourceId===id)renderSourceControlBody(s);
+  }
+  function _maybeStartCollectionAutoPlay(s){
+    if(!s||s.type!=='imageCollection')return;
+    if(s.autoPlay&&s.images&&s.images.length>1&&(_isSourcePreview(s.id)||_isSourceLive(s.id))){
+      if(!_collectionTimers[s.id])_collectionTimers[s.id]=setInterval(function(){_collectionAdvance(s.id);},COLLECTION_SLIDE_INTERVAL_MS);
+    } else {
+      _stopCollectionAutoPlay(s.id);
+    }
+  }
+  function _syncCollectionTimers(){
+    sourcesState.items.forEach(function(s){if(s.type==='imageCollection')_maybeStartCollectionAutoPlay(s);});
+  }
+  function toggleCollectionAutoPlay(id){
+    var s=findSource(id);if(!s)return;
+    s.autoPlay=!s.autoPlay;
+    saveSourcesState();
+    _maybeStartCollectionAutoPlay(s);
+    renderSourceControlBody(s);
+  }
+  function selectCollectionSlide(id,idx){
+    var s=findSource(id);if(!s||!s.images||idx<0||idx>=s.images.length)return;
+    s.currentIndex=idx;
+    saveSourcesState();
+    _refreshSourceDisplay(id);
+    renderSourceControlBody(s);
+  }
+
   function stageSourceToPreview(id){
     var s=findSource(id);if(!s)return;
     var call=_sourcePresenterCall(s);if(!call)return;
     setPreview({kind:'source',sourceId:id,label:s.name,presenterFn:call.presenterFn,presenterArgs:call.presenterArgs,androidFn:call.androidFn,androidArgs:call.androidArgs,indicatorDetail:s.name});
+    _pushSourceStyle(previewCall,s);
+    _applyVideoPlayAfterStage(previewCall,s);
+    if(s.type==='imageCollection')_maybeStartCollectionAutoPlay(s);
     renderSourcesList();
   }
   function sendSourceLive(id){
@@ -2273,6 +2741,13 @@
     if(s.type==='camera'&&s.stream){try{s.stream.getTracks().forEach(function(t){t.stop();});}catch(e){}}
     if(ctrlState.preview&&ctrlState.preview.kind==='source'&&ctrlState.preview.sourceId===id)clearPreview();
     if(ctrlState.live&&ctrlState.live.kind==='source'&&ctrlState.live.sourceId===id){ctrlState.live=null;updateScreenIndicator('none');}
+    if(s.type==='imageCollection')_stopCollectionAutoPlay(id);
+    // Release the parsed doc/deck + any cached thumbnails so removing a
+    // large PDF/PPTX source actually frees its memory (spec's PERFORMANCE
+    // section) instead of lingering in the renderer modules' caches.
+    if(s.type==='pdf'&&window.PdfCtrl)window.PdfCtrl.forget(id,s.dataUrl);
+    if(s.type==='ppt'&&window.PptxCtrl)window.PptxCtrl.forget(id,s.dataUrl);
+    if(_activeControlSourceId===id)closeSourceControls();
     sourcesState.items.splice(idx,1);
     saveSourcesState();
     renderSourcesList();
@@ -2352,14 +2827,21 @@
     var body=document.getElementById('add-source-type-body');
     var confirmBtn=document.getElementById('add-source-confirm-btn');
     if(type==='image'||type==='video'||type==='pdf'||type==='ppt'){
-      var accept={image:'image/*',video:'video/*',pdf:'application/pdf',ppt:'.ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation'}[type];
-      var note=type==='ppt'?'<div class="add-source-note warn">This build can store and list PowerPoint files, but cannot render slides in-app or on the cast display — there is no PowerPoint rendering engine or conversion backend available here. The file is kept as a named reference only.</div>':'';
+      var accept={image:'image/*',video:'video/*',pdf:'application/pdf',ppt:'.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation'}[type];
+      var note=type==='ppt'?'<div class="add-source-note">Supports PowerPoint\'s modern .pptx (Office Open XML) format. Legacy .ppt files are not supported — save as .pptx first.</div>':'';
       body.innerHTML=note
         +'<input class="add-source-input" type="text" id="new-source-name" placeholder="Source name (optional)" style="margin-top:10px;">'
         +'<label for="new-source-file" style="display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:9px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;color:var(--text);width:fit-content;font-family:\'NotoSansTamil\',sans-serif;font-weight:600;">'
         +  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Choose File</label>'
         +'<input id="new-source-file" type="file" accept="'+accept+'" style="display:none;" onchange="_onNewSourceFilePicked(this)">'
         +'<div id="new-source-file-status" style="font-size:11px;color:var(--text2);margin-top:6px;">No file selected</div>';
+      confirmBtn.disabled=true;
+    } else if(type==='imageCollection'){
+      body.innerHTML='<input class="add-source-input" type="text" id="new-source-name" placeholder="Source name (optional)" style="margin-top:0;">'
+        +'<label for="new-source-collection-files" style="display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:9px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;color:var(--text);width:fit-content;font-family:\'NotoSansTamil\',sans-serif;font-weight:600;">'
+        +  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Choose Images</label>'
+        +'<input id="new-source-collection-files" type="file" accept="image/*" multiple style="display:none;" onchange="_onCollectionFilesPicked(this)">'
+        +'<div id="new-source-file-status" style="font-size:11px;color:var(--text2);margin-top:6px;">No images selected</div>';
       confirmBtn.disabled=true;
     } else if(type==='camera'){
       body.innerHTML='<div class="add-source-note" id="camera-support-note">Checking camera access…</div>'
@@ -2376,22 +2858,67 @@
     var file=input.files[0];if(!file)return;
     var status=document.getElementById('new-source-file-status');
     var confirmBtn=document.getElementById('add-source-confirm-btn');
-    if(_newSourceType==='ppt'){
-      _pendingFileData={name:file.name,size:file.size,dataUrl:null};
-      if(status)status.textContent=file.name+' ('+_formatBytes(file.size)+') — stored as reference only';
-      confirmBtn.disabled=false;
-      return;
-    }
+    var pickedType=_newSourceType;
     if(status)status.textContent='Reading '+file.name+'…';
+    if(status)status.className='';
     confirmBtn.disabled=true;
     var reader=new FileReader();
     reader.onload=function(e){
-      _pendingFileData={name:file.name,size:file.size,dataUrl:e.target.result};
+      if(_newSourceType!==pickedType)return; // user switched type while this was reading
+      var dataUrl=e.target.result;
+      // PDF/PPTX get validated by the REAL rendering engine before they're
+      // allowed in — a file that merely reads as bytes can still be
+      // corrupted/unsupported at the format level (spec's ERROR HANDLING).
+      if(pickedType==='pdf'||pickedType==='ppt'){
+        if(status)status.textContent='Checking '+file.name+'…';
+        var validator=pickedType==='pdf'?window.PdfCtrl:window.PptxCtrl;
+        (validator?validator.validate(dataUrl):Promise.reject(new Error('Renderer not ready — try again in a moment'))).then(function(meta){
+          if(_newSourceType!==pickedType)return;
+          _pendingFileData={name:file.name,size:file.size,dataUrl:dataUrl};
+          var countLabel=pickedType==='pdf'?(meta.numPages+' page'+(meta.numPages===1?'':'s')):(meta.slideCount+' slide'+(meta.slideCount===1?'':'s'));
+          if(status){status.textContent=file.name+' ('+_formatBytes(file.size)+') — '+countLabel;status.className='';}
+          confirmBtn.disabled=false;
+        }).catch(function(err){
+          if(_newSourceType!==pickedType)return;
+          _pendingFileData=null;
+          var msg='Could not read '+(pickedType==='pdf'?'PDF':'PowerPoint')+' file: '+(err&&err.message?err.message:'invalid or unsupported file');
+          if(status){status.textContent=msg;status.className='add-source-note warn';}
+          toastWarn(msg);
+          confirmBtn.disabled=true;
+        });
+        return;
+      }
+      _pendingFileData={name:file.name,size:file.size,dataUrl:dataUrl};
       if(status)status.textContent=file.name+' ('+_formatBytes(file.size)+') — ready';
       confirmBtn.disabled=false;
     };
     reader.onerror=function(){if(status)status.textContent='Could not read file.';};
     reader.readAsDataURL(file);
+  }
+  // Image Collection — reads every picked file, preserving the order the user
+  // selected them in (spec 5.v: "Preserve collection order"); _pendingFileData
+  // holds the resulting array (rather than one {name,size,dataUrl} object) for
+  // this source type only — confirmAddSource() below branches on that shape.
+  function _onCollectionFilesPicked(input){
+    var files=Array.prototype.slice.call(input.files||[]);
+    if(!files.length)return;
+    var status=document.getElementById('new-source-file-status');
+    var confirmBtn=document.getElementById('add-source-confirm-btn');
+    if(status)status.textContent='Reading '+files.length+' image'+(files.length===1?'':'s')+'…';
+    confirmBtn.disabled=true;
+    Promise.all(files.map(function(file){
+      return new Promise(function(resolve){
+        var reader=new FileReader();
+        reader.onload=function(e){resolve({name:file.name,dataUrl:e.target.result});};
+        reader.onerror=function(){resolve(null);};
+        reader.readAsDataURL(file);
+      });
+    })).then(function(results){
+      var images=results.filter(function(r){return r;});
+      _pendingFileData=images;
+      if(status)status.textContent=images.length+' image'+(images.length===1?'':'s')+' ready';
+      confirmBtn.disabled=!images.length;
+    });
   }
   function initCameraDeviceList(){
     var note=document.getElementById('camera-support-note');
@@ -2444,10 +2971,637 @@
     }
     if(_newSourceType==='wireless')return;
     if(!_pendingFileData)return;
-    sourcesState.items.push({id:'src-'+(_sourceIdSeq++),type:_newSourceType,name:customName||_pendingFileData.name,dataUrl:_pendingFileData.dataUrl,fileMeta:{name:_pendingFileData.name,size:_pendingFileData.size}});
+    if(_newSourceType==='imageCollection'){
+      if(!_pendingFileData.length)return;
+      sourcesState.items.push({id:'src-'+(_sourceIdSeq++),type:'imageCollection',name:customName||('Image Collection ('+_pendingFileData.length+')'),images:_pendingFileData,currentIndex:0,autoPlay:false,settings:_defaultMediaSettings()});
+      _pendingFileData=null;
+      saveSourcesState();
+      renderSourcesList();closeAddSourceModal();
+      return;
+    }
+    var newSrc={id:'src-'+(_sourceIdSeq++),type:_newSourceType,name:customName||_pendingFileData.name,dataUrl:_pendingFileData.dataUrl,fileMeta:{name:_pendingFileData.name,size:_pendingFileData.size}};
+    if(_newSourceType==='image'||_newSourceType==='video'||_newSourceType==='pdf'||_newSourceType==='ppt')newSrc.settings=_defaultMediaSettings();
+    if(_newSourceType==='video'){newSrc.endBehavior='loop';newSrc.endTargetId=null;newSrc.playAfter='start';}
+    if(_newSourceType==='pdf'){newSrc.currentPage=1;}
+    if(_newSourceType==='ppt'){newSrc.currentSlide=0;}
+    sourcesState.items.push(newSrc);
     _pendingFileData=null;
     saveSourcesState();
     renderSourcesList();closeAddSourceModal();
+  }
+
+  // ============================================================
+  // SOURCE CONTROLS — swipe-to-reveal side panel (spec section 2/9). One
+  // reusable shell (openSourceControls/closeSourceControls/
+  // renderSourceControlBody) dispatches to a per-TYPE body renderer, mirroring
+  // the spec's own openSourceControls()/switch-on-type sketch:
+  //   image          -> _ctrlFrameZoomSection()
+  //   video          -> _ctrlVideoBody()
+  //   imageCollection-> _ctrlCollectionBody()
+  //   pdf            -> _ctrlPdfBody()
+  //   ppt            -> _ctrlPptBody()
+  //   idle_clock     -> _ctrlClockBody()
+  // Every control here edits the SOURCE's own stored settings and pushes the
+  // change through _sourceRuntimeCall()/_refreshSourceDisplay() — never
+  // through setPreview()/goLive() — so opening/using this panel can never
+  // itself select or present a source (spec section 11).
+  // ============================================================
+
+  // ---- swipe gesture (right-to-left on a source-card opens this card's
+  // panel) — pointer events delegated on the two list containers so newly
+  // rendered cards (after every renderSourcesList()) need no re-binding.
+  // touch-action:pan-y on .source-card (see CSS) leaves vertical scrolling to
+  // the browser; this only ever intercepts once a clearly horizontal drag is
+  // detected, and a real swipe suppresses the click that would otherwise
+  // follow it (spec 2.6) instead of touching/removing the existing
+  // onclick="stageSourceToPreview(...)" tap behavior at all. ----
+  function setupSourceCardGestures(){
+    var containers=[document.getElementById('sources-list-user'),document.getElementById('sources-list-idle')];
+    var SWIPE_OPEN_THRESHOLD=56, SWIPE_START_THRESHOLD=10, SWIPE_MAX=88;
+    var active=null, suppressClickFor=null;
+    containers.forEach(function(container){
+      if(!container)return;
+      container.addEventListener('pointerdown',function(e){
+        if(e.pointerType==='mouse'&&e.button!==0)return;
+        if(e.target.closest('.source-act-btn'))return; // camera reconnect etc. — untouched, native click
+        var card=e.target.closest('.source-card');
+        if(!card)return;
+        active={card:card,id:card.getAttribute('data-source-id'),pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,dx:0,swiping:false,candidate:true};
+      });
+      container.addEventListener('pointermove',function(e){
+        if(!active||e.pointerId!==active.pointerId||!active.candidate)return;
+        var dx=e.clientX-active.startX, dy=e.clientY-active.startY;
+        if(!active.swiping){
+          if(Math.abs(dx)<SWIPE_START_THRESHOLD&&Math.abs(dy)<SWIPE_START_THRESHOLD)return;
+          if(Math.abs(dy)>=Math.abs(dx)){active.candidate=false;return;} // vertical — hand off to native list scroll
+          active.swiping=true;
+          active.card.classList.add('dragging');
+          try{active.card.setPointerCapture(active.pointerId);}catch(err){}
+        }
+        active.dx=Math.max(-SWIPE_MAX,Math.min(0,dx)); // right-to-left only, clamped
+        active.card.style.transform='translateX('+active.dx+'px)';
+        e.preventDefault();
+      });
+      function endGesture(e){
+        if(!active||(e&&e.pointerId!==active.pointerId))return;
+        var a=active;active=null;
+        if(!a.swiping)return;
+        a.card.classList.remove('dragging');
+        a.card.style.transform='';
+        if(a.dx<=-SWIPE_OPEN_THRESHOLD){
+          suppressClickFor=a.id;
+          setTimeout(function(){if(suppressClickFor===a.id)suppressClickFor=null;},400);
+          openSourceControls(a.id);
+        }
+      }
+      container.addEventListener('pointerup',endGesture);
+      container.addEventListener('pointercancel',endGesture);
+      // Capture-phase guard — swallows the native click the browser fires
+      // right after a real swipe's pointerup, so a completed swipe never also
+      // stages the source (spec 2.6).
+      container.addEventListener('click',function(e){
+        var card=e.target.closest('.source-card');
+        if(card&&suppressClickFor&&card.getAttribute('data-source-id')===suppressClickFor){
+          e.stopPropagation();e.preventDefault();
+          suppressClickFor=null;
+        }
+      },true);
+    });
+  }
+
+  var _activeControlSourceId=null;
+  function openSourceControls(id){
+    var s=findSource(id);if(!s)return;
+    _activeControlSourceId=id;
+    renderSourceControlBody(s);
+    document.getElementById('source-ctrl-overlay').classList.add('open');
+  }
+  function closeSourceControls(){
+    document.getElementById('source-ctrl-overlay').classList.remove('open');
+    _activeControlSourceId=null;
+    _stopVideoStatusPoll();
+  }
+  function renderSourceControlBody(s){
+    if(!s||_activeControlSourceId!==s.id)return;
+    var body=document.getElementById('source-ctrl-body');
+    if(!body)return;
+    var html;
+    if(s.type==='image')html=_ctrlFrameZoomSection(s);
+    else if(s.type==='video')html=_ctrlVideoBody(s);
+    else if(s.type==='imageCollection')html=_ctrlCollectionBody(s);
+    else if(s.type==='pdf')html=_ctrlPdfBody(s);
+    else if(s.type==='ppt')html=_ctrlPptBody(s);
+    else if(s.type==='idle_clock')html=_ctrlClockBody(s);
+    else html='<div class="source-ctrl-section"><div class="add-source-note">No additional controls are available for this source type yet.</div></div>';
+    body.innerHTML=html;
+    var thumb=document.getElementById('source-ctrl-thumb');if(thumb)thumb.innerHTML=sourceThumbHTML(s);
+    var nameEl=document.getElementById('source-ctrl-name');if(nameEl)nameEl.textContent=s.name;
+    var typeEl=document.getElementById('source-ctrl-type');if(typeEl)typeEl.textContent=sourceTypeLabel(s.type);
+    if(s.type==='video')_startVideoStatusPoll(s.id);else _stopVideoStatusPoll();
+    // Page/slide thumbnail strips are lazily populated (IntersectionObserver)
+    // after their HTML lands in the DOM — same rebind-every-render reasoning
+    // as the joystick below, since innerHTML= just destroyed any prior wiring.
+    if(s.type==='pdf')_wirePdfThumbs(s);
+    else if(s.type==='ppt')_wirePptxThumbs(s);
+    // Joystick is a plain DOM control, not innerHTML-driven state — (re)bind
+    // its pointer handlers fresh every render, same as any other event target
+    // recreated by an innerHTML rebuild (see setupSourceCardGestures()'s own
+    // delegated-listener reasoning for why this pattern is already normal
+    // here rather than needing a teardown step).
+    var joyWrap=document.getElementById('joystick-'+s.id);
+    if(joyWrap)setupSourceJoystick(s.id,joyWrap);
+  }
+
+  // ---- small reusable UI builders, shared across the per-type bodies below ----
+  // Custom dropdown — reuses the EXACT .split-picker/.split-dropdown component
+  // and toggleSplitCtrlDropdown()/closeSplitCtrlDropdowns() already shared by
+  // Bible → Split Tab's Version/Book/Chapter pickers and the Appearance FAB's
+  // Easing picker (see splitPanelBarHtml()/_fabFadeSectionHtml()), instead of
+  // a native <select>, so every Source Controls dropdown matches that same
+  // look/animation/touch behavior exactly. onSelectExpr(value) must return the
+  // onclick JS for one item — by convention every handler passed in also calls
+  // closeSplitCtrlDropdowns() itself (same as onSplitCtrlChange/
+  // onFadeEasingChange already do) since selecting a value always re-renders
+  // this panel anyway.
+  var _ctrlDropdownSeq=0;
+  function _ctrlDropdownRow(label,options,current,onSelectExpr){
+    var pickerId='src-ctrl-dd-'+(_ctrlDropdownSeq++);
+    var currentOpt=options.find(function(o){return String(o.v)===String(current);})||options[0]||{label:''};
+    var arr='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>';
+    var items=options.map(function(o){
+      return '<div class="split-dropdown-item'+(String(o.v)===String(current)?' active':'')+'" onclick="'+onSelectExpr(o.v)+'">'+escH(o.label)+'</div>';
+    }).join('');
+    return '<div class="source-ctrl-row" style="flex-direction:column;align-items:stretch;">'
+      +'<div class="source-ctrl-section-label" style="margin-bottom:6px;">'+escH(label)+'</div>'
+      +'<div class="split-picker" id="'+pickerId+'">'
+      +'<div class="split-picker-btn" onclick="toggleSplitCtrlDropdown(\''+pickerId+'\')"><span>'+escH(currentOpt.label)+'</span>'+arr+'</div>'
+      +'<div class="split-dropdown" style="display:none;"><div class="split-dropdown-inner">'+items+'</div></div>'
+      +'</div></div>';
+  }
+  // Shared by Image / Video / Image Collection / PDF (spec 3.i-iii, 4.ii-iii,
+  // 5.ii-iv, 8.e-f): Display Mode + Frame Ratio + Zoom/Pan all act on the same
+  // settings{displayMode,frameRatio,zoom,panX,panY} shape and the same
+  // presenter.html setSourceFrame()/setSourceZoom() runtime calls. Pan is a
+  // joystick (spec 3) rather than arrow buttons — see setupSourceJoystick()/
+  // joystickPanDelta() below, which drive the exact same _clampMediaPan()/
+  // setSourceZoom() pipeline the old arrows used, just fed continuously.
+  function _ctrlFrameZoomSection(s){
+    var st=s.settings||_defaultMediaSettings();
+    return '<div class="source-ctrl-section">'+_ctrlDropdownRow('Display Mode',DISPLAY_MODE_OPTIONS,st.displayMode,function(v){return "onSourceDisplayModeChange('"+s.id+"','"+v+"')";})+'</div>'
+      +'<div class="source-ctrl-section">'+_ctrlDropdownRow('Frame Ratio',FRAME_RATIO_OPTIONS,st.frameRatio,function(v){return "onSourceFrameRatioChange('"+s.id+"','"+v+"')";})+'</div>'
+      +'<div class="source-ctrl-section">'
+      +'<div class="source-ctrl-section-label">Zoom &amp; Pan</div>'
+      +'<div class="source-ctrl-btn-grid">'
+      +'<button class="btn btn-secondary btn-sm" onclick="sourceZoomStep(\''+s.id+'\',-0.25)">Zoom −</button>'
+      +'<button class="btn btn-secondary btn-sm" onclick="sourceZoomReset(\''+s.id+'\')">Reset</button>'
+      +'<button class="btn btn-secondary btn-sm" onclick="sourceZoomStep(\''+s.id+'\',0.25)">Zoom +</button>'
+      +'</div>'
+      +'<div class="joystick-wrap" id="joystick-'+s.id+'">'
+      +'<div class="joystick-base">'
+      +'<svg class="joystick-arrow joystick-arrow-up" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 5 17 12 7 12"/></svg>'
+      +'<svg class="joystick-arrow-right joystick-arrow" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 12 12 17 12 7"/></svg>'
+      +'<svg class="joystick-arrow joystick-arrow-down" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 19 7 12 17 12"/></svg>'
+      +'<svg class="joystick-arrow-left joystick-arrow" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 12 12 7 12 17"/></svg>'
+      +'<div class="joystick-knob"></div>'
+      +'</div>'
+      +'</div>'
+      +'</div>';
+  }
+  function _clampMediaPan(zoom,val){var maxPan=Math.max(0,(zoom-1)*50);return Math.max(-maxPan,Math.min(maxPan,val||0));}
+  function onSourceDisplayModeChange(id,val){
+    var s=findSource(id);if(!s||!s.settings)return;
+    s.settings.displayMode=val;
+    saveSourcesState();
+    closeSplitCtrlDropdowns();
+    _sourceRuntimeCall(id,'setSourceFrame',[s.settings.displayMode,s.settings.frameRatio]);
+    renderSourceControlBody(s);
+  }
+  function onSourceFrameRatioChange(id,val){
+    var s=findSource(id);if(!s||!s.settings)return;
+    s.settings.frameRatio=val;
+    saveSourcesState();
+    closeSplitCtrlDropdowns();
+    _sourceRuntimeCall(id,'setSourceFrame',[s.settings.displayMode,s.settings.frameRatio]);
+    renderSourceControlBody(s);
+  }
+  function sourceZoomStep(id,delta){
+    var s=findSource(id);if(!s||!s.settings)return;
+    s.settings.zoom=Math.max(1,Math.min(4,(s.settings.zoom||1)+delta));
+    s.settings.panX=_clampMediaPan(s.settings.zoom,s.settings.panX);
+    s.settings.panY=_clampMediaPan(s.settings.zoom,s.settings.panY);
+    saveSourcesState();
+    _sourceRuntimeCall(id,'setSourceZoom',[s.settings.zoom,s.settings.panX,s.settings.panY]);
+  }
+  function sourceZoomReset(id){
+    var s=findSource(id);if(!s||!s.settings)return;
+    s.settings.zoom=1;s.settings.panX=0;s.settings.panY=0;
+    saveSourcesState();
+    _sourceRuntimeCall(id,'setSourceZoom',[1,0,0]);
+  }
+  // ---- Pan JOYSTICK (spec 3) — replaces the old arrow d-pad. Dragging feeds
+  // continuous small deltas into the SAME _clampMediaPan()/setSourceZoom()
+  // pipeline the arrows and Reset button already used (never a second pan
+  // implementation). Split into a cheap per-frame RENDER update
+  // (joystickPanDelta, called up to 60x/sec while dragging) and a single
+  // PERSIST step on release (joystickPanCommit) — calling saveSourcesState()
+  // every frame would re-serialize the whole sourcesState (including every
+  // Image/Video/Collection's base64 data) to localStorage dozens of times a
+  // second, which is the actual reason this is split rather than a perf nicety.
+  // The Android bridge forward (real external display) is additionally
+  // throttled to ~1-in-3 frames — the local Preview/Live iframes still update
+  // every frame for a smooth on-screen drag — since JS-to-native calls carry
+  // real per-call overhead that direct same-origin iframe calls don't. ----
+  function joystickPanDelta(id,dx,dy,forwardToAndroid){
+    var s=findSource(id);if(!s||!s.settings)return;
+    var z=s.settings.zoom||1;
+    s.settings.panX=_clampMediaPan(z,(s.settings.panX||0)+dx);
+    s.settings.panY=_clampMediaPan(z,(s.settings.panY||0)+dy);
+    if(_isSourcePreview(id))previewCall('setSourceZoom',[z,s.settings.panX,s.settings.panY]);
+    if(_isSourceLive(id)){
+      presenterCall('setSourceZoom',[z,s.settings.panX,s.settings.panY]);
+      if(forwardToAndroid)_androidSourceCommand('setSourceZoom',[z,s.settings.panX,s.settings.panY]);
+    }
+  }
+  function joystickPanCommit(){saveSourcesState();}
+  function setupSourceJoystick(sourceId,wrapEl){
+    var base=wrapEl.querySelector('.joystick-base'), knob=wrapEl.querySelector('.joystick-knob');
+    if(!base||!knob||base._joystickBound)return;
+    base._joystickBound=true;
+    var MAX_R=32, PAN_PER_FRAME=1.5;
+    var dragging=false,vx=0,vy=0,pointerId=null,rafId=null,frameCount=0;
+    function frame(){
+      if(!dragging)return;
+      if(vx||vy){frameCount++;joystickPanDelta(sourceId,vx*PAN_PER_FRAME,vy*PAN_PER_FRAME,(frameCount%3===0));}
+      rafId=requestAnimationFrame(frame);
+    }
+    function updateFromEvent(e){
+      var r=base.getBoundingClientRect();
+      var dx=e.clientX-(r.left+r.width/2), dy=e.clientY-(r.top+r.height/2);
+      var dist=Math.min(Math.hypot(dx,dy),MAX_R);
+      var angle=Math.atan2(dy,dx);
+      var kx=Math.cos(angle)*dist, ky=Math.sin(angle)*dist;
+      knob.style.transform='translate(calc(-50% + '+kx+'px), calc(-50% + '+ky+'px))';
+      var norm=dist>2?dist/MAX_R:0;
+      vx=norm?Math.cos(angle)*norm:0; vy=norm?Math.sin(angle)*norm:0;
+    }
+    function end(e){
+      if(!dragging||(e&&e.pointerId!==pointerId))return;
+      if(pointerId!=null){try{base.releasePointerCapture(pointerId);}catch(err){}}
+      dragging=false;vx=0;vy=0;pointerId=null;
+      if(rafId){cancelAnimationFrame(rafId);rafId=null;}
+      knob.style.transition='transform .18s ease';
+      knob.style.transform='translate(-50%,-50%)';
+      base.classList.remove('dragging');
+      joystickPanCommit(); // one localStorage write per gesture, not per frame
+    }
+    base.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      e.preventDefault();e.stopPropagation(); // never bubble into anything else on the panel
+      dragging=true;pointerId=e.pointerId;frameCount=0;
+      base.classList.add('dragging');
+      knob.style.transition='none';
+      try{base.setPointerCapture(pointerId);}catch(err){}
+      updateFromEvent(e);
+      if(!rafId)rafId=requestAnimationFrame(frame);
+    });
+    base.addEventListener('pointermove',function(e){
+      if(!dragging||e.pointerId!==pointerId)return;
+      e.preventDefault();
+      updateFromEvent(e);
+    });
+    base.addEventListener('pointerup',end);
+    base.addEventListener('pointercancel',end);
+  }
+
+  // ---- Video (spec 4) ----
+  var _videoStatusPollTimer=null;
+  function _startVideoStatusPoll(id){
+    _stopVideoStatusPoll();
+    _updateVideoStatusUI(id);
+    _videoStatusPollTimer=setInterval(function(){_updateVideoStatusUI(id);},400);
+  }
+  function _stopVideoStatusPoll(){if(_videoStatusPollTimer){clearInterval(_videoStatusPollTimer);_videoStatusPollTimer=null;}}
+  function _formatVideoTime(sec){sec=Math.max(0,Math.floor(sec||0));var m=Math.floor(sec/60),r=sec%60;return m+':'+(r<10?'0':'')+r;}
+  function _liveOrPreviewFrameId(id){return _isSourceLive(id)?'presenter-iframe':(_isSourcePreview(id)?'preview-iframe':null);}
+  function _updateVideoStatusUI(id){
+    var timeEl=document.getElementById('video-ctrl-time'),durEl=document.getElementById('video-ctrl-duration'),
+        seekEl=document.getElementById('video-ctrl-seek'),playBtn=document.getElementById('video-ctrl-playpause');
+    if(!timeEl)return;
+    var iframeId=_liveOrPreviewFrameId(id);
+    var st=iframeId?_readFrameValue(iframeId,'getVideoStatus',[]):null;
+    if(!st){timeEl.textContent='0:00';if(durEl)durEl.textContent='0:00';return;}
+    timeEl.textContent=_formatVideoTime(st.currentTime);
+    if(durEl)durEl.textContent=_formatVideoTime(st.duration);
+    if(seekEl&&document.activeElement!==seekEl){
+      seekEl.max=Math.max(1,Math.floor(st.duration||0));
+      seekEl.value=Math.floor(st.currentTime||0);
+    }
+    if(playBtn)playBtn.innerHTML=st.paused
+      ?'<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>'
+      :'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+  }
+  // Every explicit transport action fans out to BOTH surfaces the source
+  // currently occupies (via _sourceRuntimeCall, which already dispatches to
+  // Preview AND Live whenever the same source is staged to both — the normal
+  // case once a video has gone live, since goLive() never clears
+  // ctrlState.preview) — this is what keeps Preview/Live "one logical video
+  // playback state" (spec 4) for every action EXCEPT the live-transition
+  // moment itself, which goLive()'s own source branch below handles specially
+  // per the LIVE TRANSITION EFFECT setting.
+  function videoAction(id,action,arg){
+    if(action==='toggle'){
+      var iframeId=_liveOrPreviewFrameId(id);
+      var st=iframeId?_readFrameValue(iframeId,'getVideoStatus',[]):null;
+      action=(st&&!st.paused)?'pause':'play';
+    }
+    _sourceRuntimeCall(id,'videoControl',[action,arg]);
+    setTimeout(function(){_updateVideoStatusUI(id);},60);
+  }
+  function onVideoSeekInput(id,val){_sourceRuntimeCall(id,'videoControl',['seekTo',parseFloat(val)||0]);}
+  function onVideoEndBehaviorChange(id,val){
+    var s=findSource(id);if(!s)return;
+    s.endBehavior=val;
+    saveSourcesState();
+    closeSplitCtrlDropdowns();
+    _sourceRuntimeCall(id,'setVideoEndBehavior',[val]);
+    renderSourceControlBody(s);
+  }
+  function onVideoEndTargetChange(id,val){
+    var s=findSource(id);if(!s)return;
+    s.endTargetId=val||null;
+    saveSourcesState();
+    closeSplitCtrlDropdowns();
+    renderSourceControlBody(s);
+  }
+  // LIVE TRANSITION EFFECT (spec 4, replaces the old "Play video after"):
+  // stored in the same s.playAfter field (no second field/persistence system)
+  // — see goLive()'s source branch for what each of the three values actually
+  // does to Preview/Live's shared timeline at the moment of transition.
+  function onVideoPlayAfterChange(id,val){
+    var s=findSource(id);if(!s)return;
+    s.playAfter=val;
+    saveSourcesState();
+    closeSplitCtrlDropdowns();
+    renderSourceControlBody(s);
+  }
+  function _ctrlVideoBody(s){
+    var endOpts=[{v:'stop',label:'Stop'},{v:'loop',label:'Loop'},{v:'presentSource',label:'Present Another Source'}];
+    var transitionOpts=[{v:'start',label:'Play video from start'},{v:'resume',label:'Resume video'},{v:'manual',label:'Manual control'}];
+    var html='<div class="source-ctrl-section">'
+      +'<div class="source-ctrl-section-label">Transport</div>'
+      +'<div class="video-transport-row">'
+      +'<button class="icon-btn" title="Back 10s" onclick="videoAction(\''+s.id+'\',\'seekBy\',-10)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg></button>'
+      +'<button class="icon-btn" title="Restart" onclick="videoAction(\''+s.id+'\',\'restart\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></button>'
+      +'<button class="icon-btn play-pause" id="video-ctrl-playpause" title="Play / Pause" onclick="videoAction(\''+s.id+'\',\'toggle\')"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg></button>'
+      +'<button class="icon-btn" title="Forward 10s" onclick="videoAction(\''+s.id+'\',\'seekBy\',10)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg></button>'
+      +'</div>'
+      +'<div class="video-time-row"><span id="video-ctrl-time">0:00</span><input type="range" id="video-ctrl-seek" min="0" max="100" value="0" oninput="onVideoSeekInput(\''+s.id+'\',this.value)"><span id="video-ctrl-duration">0:00</span></div>'
+      +'</div>';
+    html+=_ctrlFrameZoomSection(s);
+    html+='<div class="source-ctrl-section">'+_ctrlDropdownRow('After Video Ends',endOpts,s.endBehavior||'loop',function(v){return "onVideoEndBehaviorChange('"+s.id+"','"+v+"')";});
+    if(s.endBehavior==='presentSource'){
+      var others=sourcesState.items.filter(function(x){return x.id!==s.id&&!(x.builtin&&x.hidden);});
+      var targetOpts=others.length?others.map(function(x){return {v:x.id,label:x.name};}):[{v:'',label:'No other sources available'}];
+      html+='<div style="margin-top:10px;">'+_ctrlDropdownRow('Present Source',targetOpts,s.endTargetId||'',function(v){return "onVideoEndTargetChange('"+s.id+"','"+v+"')";})+'</div>';
+    }
+    html+='</div>';
+    html+='<div class="source-ctrl-section">'+_ctrlDropdownRow('LIVE TRANSITION EFFECT',transitionOpts,s.playAfter||'start',function(v){return "onVideoPlayAfterChange('"+s.id+"','"+v+"')";})+'</div>';
+    return html;
+  }
+
+  // ---- Image Collection (spec 5) ----
+  function addImagesToCollection(id,input){
+    var s=findSource(id);if(!s||s.type!=='imageCollection')return;
+    var files=Array.prototype.slice.call(input.files||[]);
+    input.value=''; // lets the same file(s) be re-picked again later
+    if(!files.length)return;
+    // Same read mechanism as the initial creation picker (_onCollectionFilesPicked)
+    // — reused rather than duplicated — but APPENDS instead of replacing, so
+    // existing slides/order/currentIndex are never disturbed (spec 2).
+    Promise.all(files.map(function(file){
+      return new Promise(function(resolve){
+        var reader=new FileReader();
+        reader.onload=function(e){resolve({name:file.name,dataUrl:e.target.result});};
+        reader.onerror=function(){resolve(null);};
+        reader.readAsDataURL(file);
+      });
+    })).then(function(results){
+      var images=results.filter(function(r){return r;});
+      if(!images.length)return;
+      s.images=(s.images||[]).concat(images);
+      saveSourcesState();
+      renderSourceControlBody(s);
+    });
+  }
+  function _ctrlCollectionBody(s){
+    var count=(s.images||[]).length;
+    var html='<div class="source-ctrl-section">'
+      +'<div class="source-ctrl-section-label">Auto Slide Play'+(count?(' — Slide '+((s.currentIndex||0)+1)+' / '+count):'')+'</div>'
+      +'<button class="btn btn-block '+(s.autoPlay?'btn-secondary':'btn-primary')+'" onclick="toggleCollectionAutoPlay(\''+s.id+'\')">'
+      +(s.autoPlay
+        ?'<svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px;"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>Pause'
+        :'<svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px;"><polygon points="6 3 20 12 6 21 6 3"/></svg>Play')
+      +'</button></div>';
+    html+=_ctrlFrameZoomSection(s);
+    html+='<div class="source-ctrl-section">'
+      +'<div class="source-ctrl-section-label" style="display:flex;align-items:center;justify-content:space-between;">Slides'
+      +'<label class="btn btn-secondary btn-sm" style="padding:5px 10px;font-size:11px;" for="collection-add-files-'+s.id+'">+ Add</label></div>'
+      +'<input id="collection-add-files-'+s.id+'" type="file" accept="image/*" multiple style="display:none;" onchange="addImagesToCollection(\''+s.id+'\',this)">'
+      +'<div class="collection-slide-strip">'
+      +(s.images||[]).map(function(img,i){
+        return '<button class="collection-slide-btn'+(i===(s.currentIndex||0)?' active':'')+'" onclick="selectCollectionSlide(\''+s.id+'\','+i+')"><img src="'+img.dataUrl+'" alt=""><span>'+(i+1)+'</span></button>';
+      }).join('')
+      +'</div></div>';
+    return html;
+  }
+
+  // ---- PDF Presenter — real pdfjs-dist rendering (lib/renderers/pdf-engine.js,
+  // loaded by presenter.html for the actual page render and by the module
+  // script at the bottom of this file for page-count + thumbnails here).
+  // s.currentPage is the single source of truth for Prev/Next, the rendered
+  // page-button strip, AND what's actually sent to Preview/Live, so none of
+  // those three can ever drift out of sync with each other. Page count comes
+  // from the real parsed document (window.PdfCtrl), never a manual field. ----
+  function _ctrlPdfBody(s){
+    if(!s.dataUrl)return '<div class="source-ctrl-section"><div class="add-source-note warn">No file loaded for this source.</div></div>';
+    var meta=window.PdfCtrl&&window.PdfCtrl.meta(s.id);
+    if(!meta){
+      _loadPdfMetaThenRerender(s);
+      return '<div class="source-ctrl-section"><div class="add-source-note">Reading PDF page count…</div></div>'+_ctrlFrameZoomSection(s);
+    }
+    var total=Math.max(1,meta.numPages);
+    var page=Math.max(1,Math.min(total,s.currentPage||1));
+    if(page!==s.currentPage){s.currentPage=page;saveSourcesState();}
+    var html='<div class="source-ctrl-section">'
+      +'<div class="source-ctrl-section-label">Page Navigation</div>'
+      +'<div class="source-ctrl-row">'
+      +'<button class="icon-btn" onclick="pdfPageStep(\''+s.id+'\',-1)"'+(page<=1?' disabled':'')+'><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>'
+      +'<div style="flex:1;text-align:center;font-size:13px;color:var(--text);">Page '+page+' / '+total+'</div>'
+      +'<button class="icon-btn" onclick="pdfPageStep(\''+s.id+'\',1)"'+(page>=total?' disabled':'')+'><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button>'
+      +'</div></div>';
+    // Display Mode / Frame Ratio / Zoom / Pan Joystick, THEN the horizontal
+    // page-thumbnail strip last — matches the shared grouping order used by
+    // every other media source type.
+    html+=_ctrlFrameZoomSection(s);
+    html+='<div class="source-ctrl-section"><div class="source-ctrl-section-label">Pages</div><div class="collection-slide-strip" id="pdf-thumb-strip-'+s.id+'">'
+      +(function(){var btns='';for(var i=1;i<=total;i++){btns+='<button class="collection-slide-btn'+(i===page?' active':'')+'" data-page="'+i+'" onclick="selectPdfPage(\''+s.id+'\','+i+')"><img alt=""><span>'+i+'</span></button>';}return btns;})()
+      +'</div></div>';
+    return html;
+  }
+  // Kicks off the real parse (cached — see pdf-engine.js) and re-renders this
+  // panel once the page count is known; guards against the panel having been
+  // closed or switched to a different source in the meantime.
+  function _loadPdfMetaThenRerender(s){
+    if(!window.PdfCtrl||!s.dataUrl)return;
+    window.PdfCtrl.ensureMeta(s.id,s.dataUrl).then(function(){
+      if(_activeControlSourceId===s.id)renderSourceControlBody(s);
+    }).catch(function(err){
+      if(_activeControlSourceId===s.id){
+        var body=document.getElementById('source-ctrl-body');
+        if(body)body.innerHTML='<div class="source-ctrl-section"><div class="add-source-note warn">Could not read this PDF: '+escH(err&&err.message?err.message:'invalid or unsupported file')+'</div></div>';
+      }
+      toastWarn('Could not read PDF: '+(err&&err.message?err.message:'invalid or unsupported file'));
+    });
+  }
+  // Lazily renders each page thumbnail only once its button actually scrolls
+  // into view (the strip can hold hundreds of pages — spec's PERFORMANCE
+  // section: no dozens of large canvases up front). Called by
+  // renderSourceControlBody() right after the strip's HTML is inserted.
+  function _wirePdfThumbs(s){
+    var strip=document.getElementById('pdf-thumb-strip-'+s.id);
+    if(!strip||!window.PdfCtrl)return;
+    var btns=Array.prototype.slice.call(strip.querySelectorAll('.collection-slide-btn[data-page]'));
+    if(!btns.length)return;
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if(!entry.isIntersecting)return;
+        io.unobserve(entry.target);
+        var page=parseInt(entry.target.getAttribute('data-page'),10);
+        var img=entry.target.querySelector('img');
+        if(img)window.PdfCtrl.renderThumb(s.id,s.dataUrl,page,img);
+      });
+    },{root:strip,rootMargin:'150px'});
+    btns.forEach(function(btn){io.observe(btn);});
+  }
+  function _pdfGoToPage(id,page){
+    var s=findSource(id);if(!s||s.type!=='pdf')return;
+    var meta=window.PdfCtrl&&window.PdfCtrl.meta(id);
+    var total=Math.max(1,meta?meta.numPages:(s.currentPage||1));
+    page=Math.max(1,Math.min(total,page));
+    if(page===s.currentPage)return;
+    s.currentPage=page;
+    saveSourcesState();
+    _refreshSourceDisplay(id); // same pipeline Image Collection's slide buttons use
+    renderSourceControlBody(s);
+  }
+  function pdfPageStep(id,delta){
+    var s=findSource(id);if(!s)return;
+    _pdfGoToPage(id,(s.currentPage||1)+delta);
+  }
+  function selectPdfPage(id,page){_pdfGoToPage(id,page);}
+
+  // ---- PPTX Presenter — real @aiden0z/pptx-renderer rendering, mirroring
+  // _ctrlPdfBody's shape 1:1 (slide index is 0-based internally, like Image
+  // Collection's currentIndex, but shown 1-based like PDF's page number). ----
+  function _ctrlPptBody(s){
+    if(!s.dataUrl)return '<div class="source-ctrl-section"><div class="add-source-note warn">No file loaded for this source.</div></div>';
+    var meta=window.PptxCtrl&&window.PptxCtrl.meta(s.id);
+    if(!meta){
+      _loadPptxMetaThenRerender(s);
+      return '<div class="source-ctrl-section"><div class="add-source-note">Reading PowerPoint slide count…</div></div>'+_ctrlFrameZoomSection(s);
+    }
+    var total=Math.max(1,meta.slideCount);
+    var idx=Math.max(0,Math.min(total-1,s.currentSlide||0));
+    if(idx!==s.currentSlide){s.currentSlide=idx;saveSourcesState();}
+    var html='<div class="source-ctrl-section">'
+      +'<div class="source-ctrl-section-label">Slide Navigation</div>'
+      +'<div class="source-ctrl-row">'
+      +'<button class="icon-btn" onclick="pptxSlideStep(\''+s.id+'\',-1)"'+(idx<=0?' disabled':'')+'><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>'
+      +'<div style="flex:1;text-align:center;font-size:13px;color:var(--text);">Slide '+(idx+1)+' / '+total+'</div>'
+      +'<button class="icon-btn" onclick="pptxSlideStep(\''+s.id+'\',1)"'+(idx>=total-1?' disabled':'')+'><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button>'
+      +'</div></div>';
+    html+=_ctrlFrameZoomSection(s);
+    html+='<div class="source-ctrl-section"><div class="source-ctrl-section-label">Slides</div><div class="collection-slide-strip" id="pptx-thumb-strip-'+s.id+'">'
+      +(function(){var btns='';for(var i=0;i<total;i++){btns+='<button class="collection-slide-btn'+(i===idx?' active':'')+'" data-slide="'+i+'" onclick="selectPptxSlide(\''+s.id+'\','+i+')"><div class="collection-slide-thumb-slot"></div><span>'+(i+1)+'</span></button>';}return btns;})()
+      +'</div></div>';
+    return html;
+  }
+  function _loadPptxMetaThenRerender(s){
+    if(!window.PptxCtrl||!s.dataUrl)return;
+    window.PptxCtrl.ensureMeta(s.id,s.dataUrl).then(function(){
+      if(_activeControlSourceId===s.id)renderSourceControlBody(s);
+    }).catch(function(err){
+      if(_activeControlSourceId===s.id){
+        var body=document.getElementById('source-ctrl-body');
+        if(body)body.innerHTML='<div class="source-ctrl-section"><div class="add-source-note warn">Could not read this PowerPoint file: '+escH(err&&err.message?err.message:'invalid or unsupported file')+'</div></div>';
+      }
+      toastWarn('Could not read PowerPoint file: '+(err&&err.message?err.message:'invalid or unsupported file'));
+    });
+  }
+  function _wirePptxThumbs(s){
+    var strip=document.getElementById('pptx-thumb-strip-'+s.id);
+    if(!strip||!window.PptxCtrl)return;
+    if(s.dataUrl)window.PptxCtrl.disposeThumbs(s.dataUrl); // this strip's DOM was just rebuilt — drop handles pointing at the old one
+    var btns=Array.prototype.slice.call(strip.querySelectorAll('.collection-slide-btn[data-slide]'));
+    if(!btns.length)return;
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if(!entry.isIntersecting)return;
+        io.unobserve(entry.target);
+        var idx=parseInt(entry.target.getAttribute('data-slide'),10);
+        var slot=entry.target.querySelector('.collection-slide-thumb-slot');
+        if(slot)window.PptxCtrl.renderThumb(s.id,s.dataUrl,idx,slot);
+      });
+    },{root:strip,rootMargin:'150px'});
+    btns.forEach(function(btn){io.observe(btn);});
+  }
+  function _pptxGoToSlide(id,idx){
+    var s=findSource(id);if(!s||s.type!=='ppt')return;
+    var meta=window.PptxCtrl&&window.PptxCtrl.meta(id);
+    var total=Math.max(1,meta?meta.slideCount:(s.currentSlide||0)+1);
+    idx=Math.max(0,Math.min(total-1,idx));
+    if(idx===s.currentSlide)return;
+    s.currentSlide=idx;
+    saveSourcesState();
+    _refreshSourceDisplay(id); // same pipeline Image Collection's slide buttons use
+    renderSourceControlBody(s);
+  }
+  function pptxSlideStep(id,delta){
+    var s=findSource(id);if(!s)return;
+    _pptxGoToSlide(id,(s.currentSlide||0)+delta);
+  }
+  function selectPptxSlide(id,idx){_pptxGoToSlide(id,idx);}
+
+  // ---- Ideal Screen Clock (spec 8) ----
+  function openClockColorPicker(id){
+    var s=findSource(id);if(!s)return;
+    _appearCtx.onApply=function(colorStr){
+      s.fontColor=colorStr;
+      saveSourcesState();
+      _sourceRuntimeCall(id,'setClockStyle',[colorStr,s.fontSize||null]);
+      renderSourceControlBody(s);
+    };
+    _initPickerWithColor(s.fontColor||tabAppearance.gap.text||'#ffffff');
+    document.getElementById('colorPickerModal').style.display='flex';
+  }
+  function onClockFontSizeChange(id,val){
+    var s=findSource(id);if(!s)return;
+    s.fontSize=parseInt(val,10)||72;
+    saveSourcesState();
+    var valEl=document.getElementById('clock-fontsize-'+id+'-val');if(valEl)valEl.textContent=s.fontSize+'px';
+    _sourceRuntimeCall(id,'setClockStyle',[s.fontColor||null,s.fontSize]);
+  }
+  function _ctrlClockBody(s){
+    var color=s.fontColor||tabAppearance.gap.text||'#ffffff';
+    var size=s.fontSize||72;
+    return '<div class="source-ctrl-section">'
+      +'<div class="source-ctrl-section-label">Font Color</div>'
+      +'<button class="color-selector-btn" onclick="openClockColorPicker(\''+s.id+'\')">'
+      +'<div class="color-selector-swatch" style="background:'+color+';"></div>'
+      +'<div class="color-selector-info"><div class="cs-label">Clock Text</div><div class="cs-val">'+color+'</div></div>'
+      +'<div class="color-selector-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></div>'
+      +'</button></div>'
+      +'<div class="source-ctrl-section">'+_fabRangeRow('Font Size','clock-fontsize-'+s.id,24,160,size,'px','onClockFontSizeChange(\''+s.id+'\',this.value)')+'</div>';
   }
 
   // ---- small reusable text-input modal (renameSource) — the WebView here has
@@ -3047,7 +4201,7 @@
   ];
 
   function openAppearPopupField(tab,field,label){
-    _appearCtx.tab=tab; _appearCtx.field=field;
+    _appearCtx.tab=tab; _appearCtx.field=field; _appearCtx.onApply=null;
     var isBG=(field==='bg');
     document.getElementById('appear-popup-title').textContent=label;
     var currentColor=_getFieldColor(tab,field);
@@ -3170,7 +4324,13 @@
   confirmBtn.addEventListener('click',function(){
     var rgb=hsvToRgb(H,S,V_);
     var colorStr=A<1?'rgba('+rgb[0]+','+rgb[1]+','+rgb[2]+','+A+')':toHex(rgb[0],rgb[1],rgb[2]);
-    _setFieldColor(_appearCtx.tab,_appearCtx.field,colorStr);
+    // _appearCtx.onApply — set by openClockColorPicker() (Source Controls'
+    // Ideal Screen Clock font color) to redirect this SAME shared canvas/hue/
+    // alpha picker widget at a source's own field instead of tabAppearance,
+    // without duplicating the whole picker. Cleared by openAppearPopupField()
+    // so a normal Appearance popup color never accidentally reuses it.
+    if(typeof _appearCtx.onApply==='function')_appearCtx.onApply(colorStr);
+    else _setFieldColor(_appearCtx.tab,_appearCtx.field,colorStr);
     document.getElementById('colorPickerModal').style.display='none';
   });
   cancelBtn_.addEventListener('click',function(){document.getElementById('colorPickerModal').style.display='none';});
@@ -3284,6 +4444,7 @@
     loadCtrlBible();
     loadPersistentAppearance();
     loadSourcesState();
+    setupSourceCardGestures();
     drawHue();
     pickerUpdateAll();
     if(window.Android&&typeof window.Android.isPresenterOpen==='function'){
@@ -3802,6 +4963,82 @@
       updateMonitorResponsive();
     },350);
   })();
+  </script>
+
+  <!-- ══════════════════════════════════════
+       PDF / PPTX THUMBNAIL ENGINE — shares lib/renderers/*.js with
+       presenter.html's real showPdf()/showPptx() rendering (see that file's
+       own comment on module deferral timing — the same guarantee applies
+       here: every classic-script global/function referenced from within
+       PdfCtrl/PptxCtrl functions below is fully defined by the time this
+       module runs). This block ONLY generates page-count/thumbnails for the
+       Source Controls panel; WHICH page/slide is on Preview/Live is still
+       decided entirely by _sourcePresenterCall()/_refreshSourceDisplay() in
+       the classic script above, same as every other source type. ══════════════════════════════════════ -->
+  <script type="module">
+  import * as PdfEngine from './lib/renderers/pdf-engine.js';
+  import * as PptxEngine from './lib/renderers/pptx-engine.js';
+
+  // In-memory only (never localStorage — see spec's FILE HANDLING section):
+  // pdf: sourceId -> {numPages}; pptx: sourceId -> {slideCount}. Thumbnails
+  // themselves are cached inside the engine modules (pdf: nothing persisted,
+  // regenerated per call; pptx: SlideHandles owned by pptx-engine.js).
+  var _pdfMeta={}, _pptxMeta={};
+  var _pdfThumbCache={}; // sourceId -> {page:dataUrl}
+
+  window.PdfCtrl={
+    // Validates a PDF at Add-Source time (Phase: ERROR HANDLING) — resolves
+    // with {numPages} or rejects with a real pdf.js error.
+    validate:function(dataUrl){
+      return PdfEngine.loadPdf(dataUrl).then(function(doc){return {numPages:doc.numPages};});
+    },
+    // Ensures page-count metadata exists for an already-added source, used by
+    // _ctrlPdfBody() before it can render Prev/Next/the page strip.
+    ensureMeta:function(id,dataUrl){
+      if(_pdfMeta[id])return Promise.resolve(_pdfMeta[id]);
+      return PdfEngine.loadPdf(dataUrl).then(function(doc){
+        _pdfMeta[id]={numPages:doc.numPages};
+        return _pdfMeta[id];
+      });
+    },
+    meta:function(id){return _pdfMeta[id]||null;},
+    // Renders (once) and caches a small thumbnail for one page, then updates
+    // the given <img> in place — used by the .collection-slide-strip buttons
+    // in _ctrlPdfBody(). Silently leaves the placeholder on failure; the
+    // real load/navigation errors are already surfaced via toastWarn.
+    renderThumb:function(id,dataUrl,pageNum,imgEl){
+      var cache=_pdfThumbCache[id]||(_pdfThumbCache[id]={});
+      if(cache[pageNum]){imgEl.src=cache[pageNum];return;}
+      PdfEngine.loadPdf(dataUrl).then(function(doc){
+        return PdfEngine.renderPageThumbDataUrl(doc,pageNum,96);
+      }).then(function(url){
+        cache[pageNum]=url;
+        if(document.body.contains(imgEl))imgEl.src=url;
+      }).catch(function(){});
+    },
+    forget:function(id,dataUrl){delete _pdfMeta[id];delete _pdfThumbCache[id];if(dataUrl)PdfEngine.clearPdf(dataUrl);}
+  };
+
+  window.PptxCtrl={
+    validate:function(dataUrl){
+      return PptxEngine.loadPptxModel(dataUrl).then(function(entry){
+        return {slideCount:entry.presentation.slides.length};
+      });
+    },
+    ensureMeta:function(id,dataUrl){
+      if(_pptxMeta[id])return Promise.resolve(_pptxMeta[id]);
+      return PptxEngine.loadPptxModel(dataUrl).then(function(entry){
+        _pptxMeta[id]={slideCount:entry.presentation.slides.length};
+        return _pptxMeta[id];
+      });
+    },
+    meta:function(id){return _pptxMeta[id]||null;},
+    renderThumb:function(id,dataUrl,slideIndex,containerEl){
+      PptxEngine.renderThumbInto(dataUrl,slideIndex,containerEl,48).catch(function(){});
+    },
+    disposeThumbs:function(dataUrl){if(dataUrl)PptxEngine.disposeThumbs(dataUrl);},
+    forget:function(id,dataUrl){delete _pptxMeta[id];if(dataUrl)PptxEngine.clearPptx(dataUrl);}
+  };
   </script>
 </body>
 </html>

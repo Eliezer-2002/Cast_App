@@ -1397,12 +1397,41 @@
         '<button class="btn btn-primary" onclick="closeModal()">OK</button>',
         'warning');
     }
+    // Reached from the Import dialog's "Import" button — never reads/processes
+    // the file itself; only captures what's needed (the file can't survive an
+    // openModal() swap below, which replaces #import-book-file/-name entirely)
+    // and hands off to the warning step. See openImportJsonWarning().
+    var _pendingImportBookFile=null, _pendingImportBookName='';
     function confirmImportBook(){
       var fileInput=document.getElementById('import-book-file');
       var file=fileInput&&fileInput.files&&fileInput.files[0];
       if(!file){toast('Please choose a JSON file');return;}
       var nameInput=document.getElementById('import-book-name');
-      var userName=((nameInput&&nameInput.value)||'').trim();
+      _pendingImportBookFile=file;
+      _pendingImportBookName=((nameInput&&nameInput.value)||'').trim();
+      openImportJsonWarning();
+    }
+    // Shown before any file content is actually read/processed (spec: "Do not
+    // automatically import immediately after file selection without giving
+    // the user this warning"). This app's own Song Book shape is the only
+    // thing preserved on import — validateSongBookJson() above already
+    // rebuilds every song with exactly songId/songNumber/title/lyrics, so any
+    // extra/unrecognized keys in the selected file are silently dropped once
+    // it's processed and saved, and that can't be recovered from the saved
+    // result afterward. Reuses the same openModal()/'warning' icon pattern as
+    // showImportFormatError()/clearAllSongs() rather than a new dialog type.
+    function openImportJsonWarning(){
+      openModal('Import JSON',
+        '<p style="color:var(--text);margin-bottom:10px;">This app only supports its own Song Book JSON structure. If the file you selected has extra or unsupported keys, those keys may be removed once this app processes and saves it.</p>'+
+        '<p style="font-size:12px;color:var(--text2);line-height:1.6;">The original JSON structure cannot be restored afterward from the saved result.</p>'+
+        '<p style="font-size:13px;color:var(--warn);font-weight:700;margin-top:10px;">Keep a backup of your original file before continuing.</p>',
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="_performImportBook()">Continue Import</button>',
+        'warning');
+    }
+    function _performImportBook(){
+      var file=_pendingImportBookFile, userName=_pendingImportBookName;
+      _pendingImportBookFile=null;
+      if(!file){closeModal();return;}
       var reader=new FileReader();
       reader.onload=function(){
         var parsed;
