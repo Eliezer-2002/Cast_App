@@ -256,7 +256,17 @@ function isPreviewPresenter(){
 // this is always in sync with whichever category (Songs/Bible/Sources) is
 // currently on screen.
 // ============================================================
-var _transType='fade', _transDuration=260, _transEasing='ease';
+// _transDuration ("Switch Duration" in controller.html's Appearance panel) is
+// used for the TEXT-only animation when a Song/Bible slide changes while
+// that same presentation is already active (see animateTextEls()).
+// _transEnterDuration ("Enter Duration") is the separate duration used only
+// for the whole-layer (background+text) fade-in when Song/Bible/Split
+// content starts from an inactive overlay (see showContent()/showSplit()
+// below, which pick one or the other based on currentOverlayMode — never on
+// whether a new slide was merely selected). Both share the same _transType/
+// _transEasing — there's only one Type/Easing setting per category, not a
+// separate one for Enter vs Switch.
+var _transType='fade', _transDuration=260, _transEnterDuration=260, _transEasing='ease';
 // One-shot instant flag — set true by the CUT quick-action (via setSlideTransition's
 // 4th arg) for exactly the one screen-changing call that immediately follows it, then
 // consumed/cleared by animateLayer() below. Kept fully separate from _transType/
@@ -266,18 +276,31 @@ var _transType='fade', _transDuration=260, _transEasing='ease';
 // to make it truly instant (a 0ms CSS transition still runs a reflow/animation frame).
 var _transInstant=false;
 var TRANSITION_OUT_TRANSFORMS={fade:'',slide:'translateX(24px)',zoom:'scale(.92)'};
-function setSlideTransition(type,duration,easing,instant){
+function setSlideTransition(type,duration,easing,instant,enterDuration){
   if(type)_transType=type;
   if(duration!=null)_transDuration=duration;
   if(easing)_transEasing=easing;
   _transInstant=!!instant;
+  if(enterDuration!=null)_transEnterDuration=enterDuration;
 }
 // Runs the transition on ONE layer at a time (layerId: 'sources-layer' or
 // 'overlay-layer') — each layer keeps its own timer so animating one (e.g.
 // blanking the overlay) can never cut off or interfere with the other (e.g. a
-// source's background still mid-transition underneath).
+// source's background still mid-transition underneath). SOURCES ONLY now —
+// see animateTextEls() below for the overlay's TEXT-only equivalent, used by
+// showContent()/showSplit() instead of this, so a normal Song/Bible slide
+// change never touches (or re-transitions) the overlay's background at all.
+// Same timer map is reused by clearOverlay()'s slow Blank fade-out (keyed by
+// 'overlay-layer') and by animateTextEls()'s per-group keys, so a new slide
+// change always cancels a still-running Blank/older text animation on the
+// same target before it can interfere.
 var _layerTransitionTimers={};
-function animateLayer(layerId){
+// ms (optional): duration override for THIS call — falls back to
+// _transDuration when omitted (every existing 'sources-layer' call site, and
+// nothing else). The overlay's ENTER path (see showContent()/showSplit()
+// below) passes _transEnterDuration explicitly here so the whole-layer
+// fade-in uses "Enter Duration" instead of "Switch Duration".
+function animateLayer(layerId,ms){
   var layer=document.getElementById(layerId);
   if(!layer)return;
   if(_layerTransitionTimers[layerId]){clearTimeout(_layerTransitionTimers[layerId]);_layerTransitionTimers[layerId]=null;}
@@ -297,7 +320,7 @@ function animateLayer(layerId){
     return;
   }
   var fromTransform=TRANSITION_OUT_TRANSFORMS[_transType]||'';
-  var ms=_transDuration||0;
+  if(ms==null)ms=_transDuration||0;
   layer.style.transition='none';
   layer.style.opacity='.22';
   layer.style.transform=fromTransform;
@@ -307,6 +330,44 @@ function animateLayer(layerId){
   layer.style.transform='none';
   _layerTransitionTimers[layerId]=setTimeout(function(){
     layer.style.transition='';layer.style.opacity='';layer.style.transform='';
+  },ms);
+}
+// Text-only equivalent of animateLayer() above — dips+eases opacity/transform
+// on a specific SET of elements (never the parent #overlay-layer itself, so
+// its background is never touched/re-transitioned) using the SAME _transType/
+// _transEasing the caller already resolved via controller.html's
+// setSlideTransition() bridge, plus the explicit `ms` the caller passes in
+// (Switch Duration for a normal slide change — Enter never calls this, see
+// showContent()/showSplit() below, which use animateLayer() instead). Used for:
+//   'overlay-text' — title-area+content-area+hint-area together (Song/Bible
+//     single slide changes — see showContent() below).
+//   'split-left' / 'split-right' — each Split side's [ref-area,text-area]
+//     pair independently (see showSplit() below), so changing only one side
+//     never animates the other.
+// `instant` must be read from _transInstant and consumed (reset to false) by
+// the CALLER exactly once per showContent()/showSplit() invocation — never
+// read here directly — because showSplit() may need to call this twice (left
+// and right) in one invocation, and _transInstant is a one-shot flag that
+// must not be silently consumed by the first of those two calls.
+function animateTextEls(timerId,els,instant,ms){
+  if(_layerTransitionTimers[timerId]){clearTimeout(_layerTransitionTimers[timerId]);_layerTransitionTimers[timerId]=null;}
+  els=(els||[]).filter(function(e){return !!e;});
+  if(!els.length)return;
+  if(instant||(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)){
+    els.forEach(function(el){el.style.transition='none';el.style.opacity='';el.style.transform='';});
+    return;
+  }
+  var fromTransform=TRANSITION_OUT_TRANSFORMS[_transType]||'';
+  if(ms==null)ms=_transDuration||0;
+  els.forEach(function(el){el.style.transition='none';el.style.opacity='.22';el.style.transform=fromTransform;});
+  void els[0].offsetWidth; // commit the start state before the transition below picks it up
+  els.forEach(function(el){
+    el.style.transition='opacity '+ms+'ms '+_transEasing+', transform '+ms+'ms '+_transEasing;
+    el.style.opacity='1';
+    el.style.transform='none';
+  });
+  _layerTransitionTimers[timerId]=setTimeout(function(){
+    els.forEach(function(el){el.style.transition='';el.style.opacity='';el.style.transform='';});
   },ms);
 }
 function reportPresenterViewport(){
@@ -432,14 +493,52 @@ function _clearSlideLayout(){
   document.getElementById('overlay-layer').classList.remove('slide-title-only','slide-title-hint');
 }
 
+// Tracks the last rendered ref/text for each Split side so showSplit() below
+// can tell which side(s) actually changed — controller.html's
+// pushSplitToPresenter() always sends BOTH sides' full current state on
+// every call (even when only one side was touched), so this file has to do
+// its own diffing rather than trusting the call to mean "both changed".
+// Reset to null by clearOverlay()'s finishClear() (Blank) so a later
+// showSplit() always treats both sides as fresh instead of comparing against
+// stale pre-Blank text.
+var _splitLastL={ref:null,text:null}, _splitLastR={ref:null,text:null};
 // Called by Android bridge — show two Bible verses side-by-side (Split tab).
 // OVERLAY ONLY: never touches #sources-layer or any Source element, so
 // whatever Source is currently showing keeps running underneath untouched.
+// The background is set directly here (no transition) and each side's
+// ref+text is animated independently via animateTextEls() — see that
+// function's comment — so the background and the OTHER side never move when
+// only one side's verse actually changed.
 function showSplit(leftRef,leftText,rightRef,rightText,bg,titleColor,textColor,fontSize){
   _requestedFontSize=fontSize||26;
   var overlay=document.getElementById('overlay-layer');
-  if(bg&&bg.startsWith('data:')){overlay.style.background='url('+bg+') center/cover no-repeat';}
-  else{overlay.style.background=bg||'transparent';}
+  var newBg=(bg&&bg.startsWith('data:'))?('url('+bg+') center/cover no-repeat'):(bg||'transparent');
+  // Cancel a still-running Blank exit-fade on THIS layer and reset it to a
+  // normal resting state FIRST — a new selection must always immediately take
+  // over from a fading-out Blank, never be delayed or later wiped out by that
+  // fade's deferred finishClear() cleanup (clearOverlay()'s own setTimeout).
+  // animateLayer()'s own ENTER path already does this as a side effect of its
+  // dip, but the SWITCH path below (animateTextEls(), text-only) never
+  // touches this layer's opacity/transform at all, so without this the layer
+  // would keep fading to transparent — and the pending finishClear() would
+  // still fire later and hide the just-shown content — regardless of which
+  // path runs. Harmless no-op when nothing was pending.
+  if(_layerTransitionTimers['overlay-layer']){clearTimeout(_layerTransitionTimers['overlay-layer']);_layerTransitionTimers['overlay-layer']=null;}
+  // transition:'none' first — #overlay-layer still carries a class-level
+  // "background 0.4s ease" rule (used only by clearOverlay()'s Blank fade,
+  // which sets its own transition value whenever it actually runs); without
+  // suppressing it here, the forced reflow inside animateTextEls() below
+  // would let that rule silently animate this background change too.
+  overlay.style.transition='none';
+  overlay.style.opacity='1';
+  overlay.style.transform='none';
+  overlay.style.background=newBg; // background stays fixed — set directly, never animated
+  // Entering split mode fresh (from Song/Bible-single/none) always counts as
+  // a change for both sides, regardless of what happens to be cached from a
+  // previous split session.
+  var wasSplit=(currentOverlayMode==='split');
+  var leftChanged=!wasSplit||_splitLastL.ref!==leftRef||_splitLastL.text!==leftText;
+  var rightChanged=!wasSplit||_splitLastR.ref!==rightRef||_splitLastR.text!==rightText;
   _clearSlideLayout();
   document.getElementById('title-area').style.display='none';
   document.getElementById('content').style.display='none';
@@ -451,8 +550,36 @@ function showSplit(leftRef,leftText,rightRef,rightText,bg,titleColor,textColor,f
   refR.textContent=rightRef||''; refR.style.color=titleColor||'#9b59b6';
   txtL.textContent=leftText||''; txtL.style.color=textColor||'#ffffff';
   txtR.textContent=rightText||''; txtR.style.color=textColor||'#ffffff';
+  _splitLastL={ref:leftRef,text:leftText};
+  _splitLastR={ref:rightRef,text:rightText};
   currentOverlayMode='split';
-  animateLayer('overlay-layer');
+  if(!wasSplit){
+    // ENTER — the Split Viewer wasn't already active in this window, so the
+    // complete presentation (background + both sides' text, already set
+    // above) fades in together using Bible's Enter Duration, reusing
+    // animateLayer() (the same whole-layer fade Blank itself is built on)
+    // instead of the per-side text-only animation below. animateLayer()
+    // reads/consumes _transInstant itself, exactly as it does for its
+    // existing 'sources-layer' callers. Also cancels/resets any still-
+    // pending SWITCH text animation on either side, so a stale one can
+    // never land mid-Enter and leave a side stuck part-faded.
+    ['split-left','split-right'].forEach(function(k){
+      if(_layerTransitionTimers[k]){clearTimeout(_layerTransitionTimers[k]);_layerTransitionTimers[k]=null;}
+    });
+    [document.getElementById('split-ref-area-l'),document.getElementById('split-text-area-l'),
+     document.getElementById('split-ref-area-r'),document.getElementById('split-text-area-r')].forEach(function(el){
+      el.style.transition='';el.style.opacity='';el.style.transform='';
+    });
+    animateLayer('overlay-layer',_transEnterDuration);
+  } else {
+    // SWITCH — already active; only the side(s) that actually changed
+    // animate (text only), background stays untouched. instant is read/
+    // consumed exactly once here even though up to two animateTextEls()
+    // calls may follow.
+    var instant=_transInstant; _transInstant=false;
+    if(leftChanged)animateTextEls('split-left',[document.getElementById('split-ref-area-l'),document.getElementById('split-text-area-l')],instant,_transDuration);
+    if(rightChanged)animateTextEls('split-right',[document.getElementById('split-ref-area-r'),document.getElementById('split-text-area-r')],instant,_transDuration);
+  }
   setTimeout(refitAll,0);
 }
 
@@ -463,8 +590,22 @@ function showSplit(leftRef,leftText,rightRef,rightText,bg,titleColor,textColor,f
 function showContent(type,titleText,bodyText,bg,titleColor,textColor,fontSize,hintText,hintColor){
   _requestedFontSize=fontSize||30;
   var overlay=document.getElementById('overlay-layer');
-  if(bg&&bg.startsWith('data:')){overlay.style.background='url('+bg+') center/cover no-repeat';}
-  else{overlay.style.background=bg||'transparent';}
+  var newBg=(bg&&bg.startsWith('data:'))?('url('+bg+') center/cover no-repeat'):(bg||'transparent');
+  // Cancel a still-running Blank exit-fade on THIS layer and reset it to a
+  // normal resting state FIRST — see the matching comment in showSplit()
+  // above: a new selection must always immediately take over from a fading-
+  // out Blank, never be delayed or later wiped out by that fade's deferred
+  // finishClear() cleanup, regardless of whether the ENTER or SWITCH path
+  // below ends up running. Harmless no-op when nothing was pending.
+  if(_layerTransitionTimers['overlay-layer']){clearTimeout(_layerTransitionTimers['overlay-layer']);_layerTransitionTimers['overlay-layer']=null;}
+  // transition:'none' first — see the matching comment in showSplit() above:
+  // without it, the forced reflow inside animateTextEls() below would let
+  // #overlay-layer's own class-level "background 0.4s ease" rule silently
+  // animate this background change.
+  overlay.style.transition='none';
+  overlay.style.opacity='1';
+  overlay.style.transform='none';
+  overlay.style.background=newBg; // background stays fixed — set directly, never animated, on a slide change
   document.getElementById('split-screen').style.display='none';
   // Title area
   var titleArea=document.getElementById('title-area');
@@ -499,8 +640,35 @@ function showContent(type,titleText,bodyText,bg,titleColor,textColor,fontSize,hi
   // ever happens) — content then just gets the full overlay, same as before.
   overlay.classList.toggle('slide-title-only',hasTitle&&!hasHint);
   overlay.classList.toggle('slide-title-hint',hasTitle&&hasHint);
+  // ENTER vs SWITCH is decided from the overlay's OWN current state, never
+  // from the fact that a slide was merely selected: if this exact type
+  // ('song' or 'bible'/'verse' — see the real Android cast bridge's own
+  // showStanza()/showVerse() call sites for why the two iframes and the real
+  // cast display can legitimately use different literal strings here, self-
+  // consistently) wasn't already what the overlay was showing, nothing of
+  // this kind was active a moment ago, so it's entering fresh.
+  var wasThisType=(currentOverlayMode===type);
   currentOverlayMode=type;
-  animateLayer('overlay-layer');
+  if(!wasThisType){
+    // ENTER — complete presentation (background + text, already set above)
+    // fades in together using this category's Enter Duration, reusing
+    // animateLayer() (the same whole-layer fade Blank itself is built on)
+    // instead of the text-only animation below. animateLayer() reads/
+    // consumes _transInstant itself, exactly as it does for its existing
+    // 'sources-layer' callers. Also cancels/resets any still-pending SWITCH
+    // text animation on these elements, so a stale one can never land mid-
+    // Enter and leave the text stuck part-faded.
+    if(_layerTransitionTimers['overlay-text']){clearTimeout(_layerTransitionTimers['overlay-text']);_layerTransitionTimers['overlay-text']=null;}
+    [titleArea,document.getElementById('content-area'),hintArea].forEach(function(el){el.style.transition='';el.style.opacity='';el.style.transform='';});
+    animateLayer('overlay-layer',_transEnterDuration);
+  } else {
+    // SWITCH — this presentation was already active; only the text animates
+    // (Switch Duration), background stays untouched — never the parent
+    // #overlay-layer (which owns the background, already set above with no
+    // transition at all).
+    var instant=_transInstant; _transInstant=false;
+    animateTextEls('overlay-text',[titleArea,document.getElementById('content-area'),hintArea],instant,_transDuration);
+  }
   // Auto-fit after layout has actually settled into its new grid-row sizes.
   setTimeout(refitAll,0);
 }
@@ -593,20 +761,100 @@ function clearDisplay(){
   animateLayer('sources-layer');
 }
 
-// Called by Android bridge / controller.html's Blank quick-action — clears
-// ONLY the Song/Bible OVERLAY (title/content/hint/split all hidden, overlay
-// background back to fully transparent), leaving whatever Source is showing
-// on the base layer completely untouched. This is the overlay's mirror of
-// clearDisplay() above.
-function clearOverlay(){
-  _clearSlideLayout();
-  document.getElementById('title-area').style.display='none';
-  document.getElementById('content').style.display='none';
-  document.getElementById('hint-area').style.display='none';
-  document.getElementById('split-screen').style.display='none';
-  document.getElementById('overlay-layer').style.background='transparent';
-  currentOverlayMode='none';
-  animateLayer('overlay-layer');
+// Called by Android bridge / controller.html's Blank quick-action — SLOWLY
+// fades the ENTIRE Song/Bible OVERLAY (title/content/hint/split AND its
+// background — the whole #overlay-layer element, so text and background fade
+// away together) out to fully transparent, THEN clears its content back to
+// the empty state. Covers Song, single-verse Bible, AND the Bible Split
+// Viewer in one shared mechanism, since all three only ever live on this one
+// layer/background (see LAYER ARCHITECTURE) — never touches #sources-layer,
+// so whatever Source is showing on the base layer is always left running
+// underneath untouched.
+//
+// Deliberately its own timing, kept separate from the user-configurable
+// slide-to-slide Transition (_transType/_transDuration/_transEasing, used by
+// animateLayer() for normal slide changes) — Blank is a distinct "fade to
+// nothing" action, not a slide change. The actual duration (ms) is resolved
+// by the CALLER (controller.html's activateBlank()/_blankDuration()) per the
+// context it's running in — the category's own Exit Duration for a direct
+// user Blank click, or the category's normal Switch/Transition duration for
+// Transition's internal Blank-first step — and passed in explicitly, so this
+// one function never needs to know or guess why it's being called.
+// BLANK_FADE_MS is only the fallback when no ms is given (defensive; every
+// current caller always passes one explicitly). BLANK_FADE_EASING is fixed —
+// there's no separate easing setting for Blank, only for the persistent
+// Transition (_transEasing). Reuses animateLayer()'s own
+// _layerTransitionTimers['overlay-layer'] slot for its pending cleanup, so a
+// new showContent()/showSplit() call (which already clears that slot at the
+// top of animateLayer()) always cancels a still-fading-out Blank before it
+// can wipe out content just selected. CUT's one-shot instant flag
+// (_transInstant) is honored the same way animateLayer() honors it — checked
+// BEFORE ms is even looked at — so Blank-before-CUT stays instant regardless
+// of whatever ms the caller resolved.
+var BLANK_FADE_MS=700, BLANK_FADE_EASING='ease';
+function clearOverlay(ms){
+  var layer=document.getElementById('overlay-layer');
+  if(ms==null)ms=BLANK_FADE_MS;
+  // Cancel ANY in-flight animation on the overlay or its text groups —
+  // the layer-wide Blank fade itself, a still-running slide-to-slide text
+  // transition (overlay-text), or either Split side's text transition —
+  // so nothing left over from those can fight with or undo this cleanup.
+  ['overlay-layer','overlay-text','split-left','split-right'].forEach(function(k){
+    if(_layerTransitionTimers[k]){clearTimeout(_layerTransitionTimers[k]);_layerTransitionTimers[k]=null;}
+  });
+  function finishClear(){
+    _clearSlideLayout();
+    var titleArea=document.getElementById('title-area'),contentArea=document.getElementById('content-area'),
+        hintArea=document.getElementById('hint-area');
+    titleArea.style.display='none';
+    document.getElementById('content').style.display='none';
+    hintArea.style.display='none';
+    document.getElementById('split-screen').style.display='none';
+    // Split's own text/reference nodes are cleared too — otherwise their
+    // stale strings would sit hidden in the DOM and could reappear if the
+    // split screen is ever shown again before a fresh showSplit() call resets
+    // them. _splitLastL/_splitLastR are reset alongside so that next
+    // showSplit() call always treats both sides as fresh (see their own
+    // comment above showSplit()) instead of comparing against this
+    // just-cleared text and wrongly skipping the fade-in.
+    var refL=document.getElementById('split-ref-l'),refR=document.getElementById('split-ref-r'),
+        txtL=document.getElementById('split-text-l'),txtR=document.getElementById('split-text-r'),
+        refAreaL=document.getElementById('split-ref-area-l'),refAreaR=document.getElementById('split-ref-area-r'),
+        txtAreaL=document.getElementById('split-text-area-l'),txtAreaR=document.getElementById('split-text-area-r');
+    refL.textContent='';refR.textContent='';txtL.textContent='';txtR.textContent='';
+    _splitLastL={ref:null,text:null};
+    _splitLastR={ref:null,text:null};
+    // Defensively reset any leftover inline opacity/transform/transition from
+    // an interrupted text-only transition (animateTextEls()) on every group —
+    // harmless if there was none, but never leaves a group stuck mid-fade.
+    [titleArea,contentArea,hintArea,refAreaL,refAreaR,txtAreaL,txtAreaR].forEach(function(el){
+      el.style.transition='';el.style.opacity='';el.style.transform='';
+    });
+    layer.style.background='transparent';
+    currentOverlayMode='none';
+    // Rest state — fully opaque again and ready for whatever shows next; the
+    // fade's opacity is never permanently left behind.
+    layer.style.transition='none';
+    layer.style.opacity='1';
+    void layer.offsetWidth;
+    layer.style.transition='';
+  }
+  if(currentOverlayMode==='none'){
+    // Already empty — nothing to fade, just make sure rest state is clean.
+    layer.style.transition='';layer.style.opacity='';layer.style.transform='';
+    return;
+  }
+  if(_transInstant||(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)){
+    _transInstant=false;
+    finishClear();
+    return;
+  }
+  // transform is also reset here (not just opacity) so the fade always starts
+  // clean even if Blank interrupts a slide/zoom-type transition still mid-flight.
+  layer.style.transition='opacity '+ms+'ms '+BLANK_FADE_EASING+', transform '+ms+'ms '+BLANK_FADE_EASING;
+  layer.style.opacity='0';
+  layer.style.transform='none';
+  _layerTransitionTimers['overlay-layer']=setTimeout(finishClear,ms);
 }
 
 // Font weight update — Content font-weight control (Songs/Bible, from the

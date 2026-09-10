@@ -347,11 +347,15 @@ public class MainActivity extends Activity {
         // presenter.html's LAYER ARCHITECTURE) — the Sources base layer underneath
         // is left untouched. Called by controller.html's Blank quick-action instead
         // of showGap('blank',...), which would otherwise replace whatever Source is
-        // currently on the base layer.
+        // currently on the base layer. ms is the fade-out duration controller.html's
+        // activateBlank()/_blankDuration() already resolved for this call's context
+        // (Exit Duration for a direct Blank click, or the category's normal Switch/
+        // Transition duration for Transition's own internal Blank-first step) —
+        // this never decides that itself, it only forwards the number.
         @JavascriptInterface
-        public void clearOverlay() {
+        public void clearOverlay(final int ms) {
             runOnUiThread(new Runnable() { public void run() {
-                if (castPresentation != null) castPresentation.runJS("clearOverlay()");
+                if (castPresentation != null) castPresentation.runJS("clearOverlay(" + ms + ")");
             }});
         }
 
@@ -365,12 +369,18 @@ public class MainActivity extends Activity {
         // animation entirely on the real cast display too — see cutPreviewToLive()/
         // _instantTransferInFlight in controller.html and _transInstant in
         // presenter.html. It never changes type/duration/easing themselves.
+        // enterDuration is the separate "Enter Duration" (fadeSettings[cat].
+        // enterDuration in controller.html) used only when Song/Bible/Split
+        // content starts from an inactive overlay on the real cast display,
+        // instead of the plain "Switch Duration" above — see presenter.html's
+        // showContent()/showSplit(), which pick between the two based on
+        // currentOverlayMode, not on whether a new slide was merely selected.
         @JavascriptInterface
-        public void setTransition(final String type, final int duration, final String easing, final boolean instant) {
+        public void setTransition(final String type, final int duration, final String easing, final boolean instant, final int enterDuration) {
             runOnUiThread(new Runnable() { public void run() {
                 if (castPresentation != null)
                     castPresentation.runJS("if(typeof setSlideTransition==='function')setSlideTransition('" +
-                        esc(type) + "'," + duration + ",'" + esc(easing) + "'," + instant + ")");
+                        esc(type) + "'," + duration + ",'" + esc(easing) + "'," + instant + "," + enterDuration + ")");
             }});
         }
 

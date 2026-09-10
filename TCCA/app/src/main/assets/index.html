@@ -9,7 +9,7 @@
         @font-face { font-family:'NotoSansTamil'; src:url('fonts/NotoSansTamil-Bold.woff2') format('woff2'); font-weight:700; }
 
         :root {
-          --bg:#1a0a2e; --bg2:#2d1b4e; --bg3:#a7a4ad;
+          --bg:#1a0a2e; --bg2:#2d1b4e; --bg3:#46336b;
           --text:#e8e0f0; --text2:#b8a8d0;
           --accent:#9b59b6; --accent2:#7d3c98; --accent3:#c39bd3;
           --nav-bg:#12071f; --card:#2a1a42; --border:#4a3060;
@@ -1316,42 +1316,84 @@
 
     function openImportDialog(){
       openModal('Import Songs Book',
-        '<div class="form-group" style="padding:0;border:none;">'+
+        '<div class="form-group" style="padding:0 0 12px;border:none;">'+
           '<label class="form-label">JSON File *</label>'+
           '<input id="import-book-file" type="file" accept=".json,application/json" class="form-input" style="padding:8px;">'+
-          '<p style="font-size:11px;color:var(--text2);margin-top:8px;">The file must contain a Song Book "name" and a "songs" array — the same format produced by Export.</p>'+
+        '</div>'+
+        '<div class="form-group" style="padding:0;border:none;">'+
+          '<label class="form-label">Book Name (optional)</label>'+
+          '<input id="import-book-name" class="form-input" placeholder="'+esc(t('bookNamePh'))+'" onfocus="castingKeyboardWarn()" onclick="castingKeyboardWarn()">'+
+          '<p style="font-size:11px;color:var(--text2);margin-top:8px;">Leave blank to use the name from the file, or "Untitled Songs Book" if the file has none. Each song needs songId, songNumber, title and lyrics — either a "songs" list or a plain list of songs is accepted; extra fields are ignored.</p>'+
         '</div>',
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="confirmImportBook()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Import</button>',
         'download');
     }
-    // Strict schema check per the new Song Book import format — never repaired/converted
-    // from an older shape; anything that doesn't match exactly is rejected outright.
-    var IMPORT_SONG_KEYS=['songId','songNumber','title','lyrics'];
+    // Accepts either shape — {"name":..., "songs":[...]} (what Export produces) or a
+    // bare [...] array of songs with no wrapping object/name — and is lenient about
+    // extra/unexpected keys anywhere (root or per-song): they're simply ignored rather
+    // than rejecting the whole file. Only songId/songNumber/title/lyrics are read from
+    // each song, and the returned song objects are always rebuilt with exactly those
+    // four keys in that fixed order (see confirmImportBook()), so stray keys never
+    // survive into saved data and the on-disk field order never depends on whatever
+    // order the source file happened to use. On any real problem this returns a
+    // specific `reason` (not just ok:false) so the user gets an actionable message
+    // instead of a generic "wrong format" — see showImportFormatError().
     function validateSongBookJson(parsed){
-      if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))return{ok:false};
-      if(typeof parsed.name!=='string'||!parsed.name.trim())return{ok:false};
-      if(!Array.isArray(parsed.songs))return{ok:false};
+      var jsonName=null,rawSongs;
+      if(Array.isArray(parsed)){
+        rawSongs=parsed;
+      } else if(parsed&&typeof parsed==='object'){
+        if(parsed.name!=null){
+          if(typeof parsed.name!=='string'||!parsed.name.trim())
+            return{ok:false,reason:'The "name" field is present but is not usable text. Remove it, or make it a plain, non-empty string.'};
+          jsonName=parsed.name.trim();
+        }
+        if(!Array.isArray(parsed.songs))
+          return{ok:false,reason:'This file needs a "songs" list (or must itself be a list of songs) — no "songs" array was found.'};
+        rawSongs=parsed.songs;
+      } else {
+        return{ok:false,reason:'The file must be either a JSON object with a "songs" list, or a JSON list of songs.'};
+      }
       var songs=[];
-      for(var i=0;i<parsed.songs.length;i++){
-        var s=parsed.songs[i];
-        if(!s||typeof s!=='object'||Array.isArray(s))return{ok:false};
-        var keys=Object.keys(s);
-        for(var k=0;k<keys.length;k++){if(IMPORT_SONG_KEYS.indexOf(keys[k])===-1)return{ok:false};}
-        if(typeof s.songId!=='string'||!s.songId.trim())return{ok:false};
-        if(typeof s.songNumber!=='number'||!isFinite(s.songNumber)||!s.songNumber)return{ok:false};
-        if(typeof s.title!=='string'||!s.title.trim())return{ok:false};
-        if(typeof s.lyrics!=='string'||!s.lyrics.trim())return{ok:false};
+      for(var i=0;i<rawSongs.length;i++){
+        var s=rawSongs[i],pos='Song #'+(i+1)+' in the file';
+        if(!s||typeof s!=='object'||Array.isArray(s))
+          return{ok:false,reason:pos+' is not a valid song entry (expected an object with songId, songNumber, title and lyrics).'};
+        if(typeof s.songId!=='string'||!s.songId.trim())
+          return{ok:false,reason:pos+' is missing a valid "songId" (must be non-empty text).'};
+        if(typeof s.songNumber!=='number'||!isFinite(s.songNumber)||!s.songNumber)
+          return{ok:false,reason:pos+' is missing a valid "songNumber" (must be a non-zero number).'};
+        if(typeof s.title!=='string'||!s.title.trim())
+          return{ok:false,reason:pos+' is missing a valid "title" (must be non-empty text).'};
+        if(typeof s.lyrics!=='string'||!s.lyrics.trim())
+          return{ok:false,reason:pos+' is missing valid "lyrics" (must be non-empty text).'};
+        // Rebuilt with exactly these four keys, in this order — any other keys the
+        // entry had are dropped here, never carried into the saved Song Book.
         songs.push({songId:s.songId.trim(),songNumber:s.songNumber,title:s.title.trim(),lyrics:cleanLyrics(s.lyrics)});
       }
-      return{ok:true,name:parsed.name.trim(),songs:songs};
+      return{ok:true,name:jsonName,songs:songs};
     }
-    function showImportFormatError(){
+    // Finds the next free "Untitled Songs Book N" name — used only when neither the
+    // user nor the imported file supplied a name (see confirmImportBook()) — so
+    // repeated no-name imports don't all collide on the exact same name.
+    function nextUntitledBookName(){
+      var used={};
+      state.books.forEach(function(b){
+        var m=/^Untitled Songs Book (\d+)$/.exec(b.name||'');
+        if(m)used[m[1]]=true;
+      });
+      var n=1;while(used[n])n++;
+      return 'Untitled Songs Book '+n;
+    }
+    function showImportFormatError(reason){
       var example='{\n  "name": "Song Book Name",\n  "songs": [\n    {\n      "songId": "sample1",\n      "songNumber": 1,\n      "title": "Song Title",\n      "lyrics": "Song lyrics"\n    }\n  ]\n}';
+      var altExample='[\n  {\n    "songId": "sample1",\n    "songNumber": 1,\n    "title": "Song Title",\n    "lyrics": "Song lyrics"\n  }\n]';
       openModal('Import Failed',
-        '<p style="color:var(--text);margin-bottom:10px;">This file cannot be imported because it does not match the required Song Book format.</p>'+
-        '<p style="font-size:12px;color:var(--text2);margin-bottom:6px;">Required format:</p>'+
+        '<p style="color:var(--text);margin-bottom:10px;">'+esc(reason||'This file cannot be imported because it does not match the required Song Book format.')+'</p>'+
+        '<p style="font-size:12px;color:var(--text2);margin-bottom:6px;">Every song needs songId, songNumber, title and lyrics. Either of these is accepted:</p>'+
         '<pre style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11px;color:var(--text);overflow-x:auto;white-space:pre-wrap;word-break:break-word;">'+esc(example)+'</pre>'+
-        '<p style="color:var(--text);margin-top:10px;font-size:13px;">Please select a valid Song Book JSON file.</p>',
+        '<pre style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11px;color:var(--text);overflow-x:auto;white-space:pre-wrap;word-break:break-word;margin-top:6px;">'+esc(altExample)+'</pre>'+
+        '<p style="color:var(--text);margin-top:10px;font-size:13px;">Please fix the issue above and try again.</p>',
         '<button class="btn btn-primary" onclick="closeModal()">OK</button>',
         'warning');
     }
@@ -1359,12 +1401,15 @@
       var fileInput=document.getElementById('import-book-file');
       var file=fileInput&&fileInput.files&&fileInput.files[0];
       if(!file){toast('Please choose a JSON file');return;}
+      var nameInput=document.getElementById('import-book-name');
+      var userName=((nameInput&&nameInput.value)||'').trim();
       var reader=new FileReader();
       reader.onload=function(){
         var parsed;
-        try{parsed=JSON.parse(String(reader.result));}catch(e){showImportFormatError();return;}
+        try{parsed=JSON.parse(String(reader.result));}
+        catch(e){showImportFormatError('This file is not valid JSON — check it for a missing comma, quote, or bracket.');return;}
         var result=validateSongBookJson(parsed);
-        if(!result.ok){showImportFormatError();return;}
+        if(!result.ok){showImportFormatError(result.reason);return;}
         // Only created once validation fully passes — never a partial/invalid book,
         // and this can never touch/overwrite an existing (user or imported) Song Book.
         var usedIds={};
@@ -1372,8 +1417,11 @@
           if(usedIds[s.songId])s.songId=genId('song');
           usedIds[s.songId]=true;
         });
-        state.books.push({id:genId('user'),name:result.name,source:'user',songs:result.songs});
-        persistAndSync();closeModal();toast('Imported "'+result.name+'" ['+result.songs.length+' song(s)] ✓');renderSongsPage();
+        // Name priority: what the user typed, then the file's own "name", then a
+        // fresh default — never left blank.
+        var finalName=userName||result.name||nextUntitledBookName();
+        state.books.push({id:genId('user'),name:finalName,source:'user',songs:result.songs});
+        persistAndSync();closeModal();toast('Imported "'+finalName+'" ['+result.songs.length+' song(s)] ✓');renderSongsPage();
       };
       reader.onerror=function(){toast('Could not read the selected file');};
       reader.readAsText(file);

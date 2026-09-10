@@ -30,11 +30,10 @@
     .header-icon-badge { width:28px; height:28px; border-radius:8px; background:rgba(155,89,182,.18); border:1px solid rgba(155,89,182,.35); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--accent); }
     .header-icon-badge svg { width:16px; height:16px; }
     #ctrl-header h1 { font-size:15px; font-weight:800; letter-spacing:-.01em; flex:1; }
-    /* Now an actual <button> (was a plain status div) — see onCastStatusClick() in
-       the script, which opens the device picker. Kept visually identical: the border/
-       background/reset here just neutralize default button chrome. */
-    .cast-status { display:flex; align-items:center; gap:6px; border-radius:20px; padding:5px 10px; border:1px solid; background:none; font-family:inherit; cursor:pointer; max-width:150px; }
-    .cast-status:active { opacity:.8; }
+    /* Status-only — not a button. No nearby-device discovery UI is reachable from
+       here any more; this purely mirrors the real Android DisplayManager connection
+       state reported via updateCastStatus() (see MainActivity's notifyCastStatus()). */
+    .cast-status { display:flex; align-items:center; gap:6px; border-radius:20px; padding:5px 10px; border:1px solid; background:none; font-family:inherit; max-width:150px; }
     .cast-status.live { background:rgba(39,174,96,.15); border-color:rgba(39,174,96,.3); }
     .cast-status.offline { background:rgba(231,76,60,.12); border-color:rgba(231,76,60,.25); }
     .cast-dot-ctrl { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
@@ -512,7 +511,7 @@
        range-row's <input type=range>) refusing to shrink to fit it — see the
        .range-row input[type=range] min-width:0 fix above, which is the actual fix;
        max-width:100% here is just a defensive floor for the box itself. */
-    #appear-fab-popup{position:fixed;z-index:148;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:14px 16px 18px;width:min(86vw,280px);max-width:100%;max-height:min(76vh,560px);overflow-y:auto;box-shadow:0 6px 28px rgba(0,0,0,.55);display:none;}
+    #appear-fab-popup{position:fixed;z-index:148;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:14px 16px 18px;width:min(86vw,280px);max-width:100%;max-height:min(44vh,560px);overflow-y:auto;box-shadow:0 6px 28px rgba(0,0,0,.55);display:none;}
     .fab-popup-title{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;}
     .fab-section{margin-bottom:14px;min-width:0;}
     .fab-section:last-child{margin-bottom:0;}
@@ -527,6 +526,16 @@
     .fab-select-row label{font-size:11px;color:var(--text2);flex:0 0 auto;}
     .fab-select{flex:1 1 auto;min-width:0;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'NotoSansTamil',sans-serif;padding:7px 8px;}
     .fab-divider{height:1px;background:var(--border);margin:12px 0;}
+    /* Preview/Live output-destination radios (Songs/Bible Appearance) — custom-
+       styled, mutually-exclusive pair; see _fabOutputDestRow()/onOutputDestChange(). */
+    .fab-radio-row{display:flex;gap:8px;}
+    .fab-radio-opt{flex:1;display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:9px;border:1.5px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;font-size:12px;font-weight:600;font-family:'NotoSansTamil',sans-serif;transition:all .15s;}
+    .fab-radio-opt:active{transform:scale(.96);}
+    .fab-radio-opt.active{border-color:var(--accent);background:rgba(155,89,182,.18);color:var(--accent3);}
+    .fab-radio-dot{position:relative;width:16px;height:16px;border-radius:50%;border:2px solid var(--text2);flex-shrink:0;transition:border-color .15s;}
+    .fab-radio-opt.active .fab-radio-dot{border-color:var(--accent);}
+    .fab-radio-dot::after{content:'';position:absolute;inset:3px;border-radius:50%;background:var(--accent);transform:scale(0);transition:transform .15s;}
+    .fab-radio-opt.active .fab-radio-dot::after{transform:scale(1);}
     /* Dropdowns near the bottom of the Appearance popup (e.g. the Easing picker,
        which reuses .split-picker/.split-dropdown — see _fabFadeSectionHtml()) open
        downward by default, which pushes them past the popup's own scrollable
@@ -643,10 +652,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg>
     </div>
     <h1>Cast Control</h1>
-    <button type="button" class="cast-status offline" id="cast-status-badge" onclick="onCastStatusClick()" title="Cast connection">
+    <div class="cast-status offline" id="cast-status-badge" title="Cast connection">
       <div class="cast-dot-ctrl"></div>
       <span id="cast-status-label">Disconnected</span>
-    </button>
+    </div>
     <div class="close-ctrl-btn" onclick="closeController()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </div>
@@ -814,36 +823,6 @@
       <div style="display:flex;gap:8px;padding:0 16px 16px;flex-shrink:0;">
         <button class="btn btn-secondary" style="flex:1;" onclick="closeAddSourceModal()">Cancel</button>
         <button class="btn btn-primary" style="flex:1;" id="add-source-confirm-btn" onclick="confirmAddSource()" disabled>Add Source</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- CAST DEVICES MODAL — device-selection UI opened from the header's Connected/
-       Disconnected button (onCastStatusClick()). Reuses the same modal chrome as Add
-       Source (.add-source-*) and the same .device-list/.device-item language already
-       used for camera device selection above — not a new component. Separate from
-       the Preview/Live enlarged floating window (#hold-preview-overlay); the two are
-       unrelated features that just happen to both be overlays. -->
-  <div class="add-source-overlay" id="cast-devices-overlay" onclick="if(event.target===this)closeCastDevicesModal();">
-    <div class="add-source-modal">
-      <div class="add-source-header">
-        <h4>Available Devices</h4>
-        <button class="icon-btn" onclick="closeCastDevicesModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-      </div>
-      <div class="add-source-body">
-        <div class="add-source-note warn" id="cast-devices-note" style="display:none;"></div>
-        <div class="device-list" id="cast-devices-list" style="max-height:240px;"></div>
-      </div>
-      <!-- Disconnect — only shown while actually connected (toggled in
-           updateCastStatus()); routes through Android's disconnectDisplay(), the
-           JS-bridge mirror of the same dismissPresentation() path the OS itself
-           uses when a display drops on its own. -->
-      <div style="padding:0 16px 10px;flex-shrink:0;display:none;" id="cast-devices-disconnect-row">
-        <button type="button" class="btn-block btn btn-danger" id="cast-devices-disconnect-btn" onclick="disconnectCastDevice()">Disconnect</button>
-      </div>
-      <div style="display:flex;gap:8px;padding:0 16px 16px;flex-shrink:0;">
-        <button type="button" class="btn btn-secondary" id="cast-devices-refresh-btn" style="flex:1;" onclick="refreshCastDevices()">Refresh</button>
-        <button type="button" class="btn btn-secondary" style="flex:1;" onclick="openSystemCastSettings()">Cast Settings</button>
       </div>
     </div>
   </div>
@@ -1184,15 +1163,21 @@
   // localStorage under 'castTabAppearance' so it survives closing/
   // disconnecting Cast Control; see saveTabAppearance()/loadTabAppearance(),
   // called from init().
+  // outputDest ('live'|'preview') on songs/bible is the Appearance panel's
+  // Preview/Live output-destination radio (see _fabOutputDestRow()/
+  // onOutputDestChange() below) — it decides which real monitor surface
+  // showStanza()/showVerse() route new content to (see _presentSongBible()).
+  // Default 'live' preserves this app's original behavior (Songs/Bible always
+  // went straight to Live) for anyone upgrading with no saved preference.
   var tabAppearance={
     gap:   {bg:'#000000', bgImage:null, text:'#ffffff'},
     songs: {bg:'#000000', bgImage:null,
             titleColor:'#9b59b6',
             lyricColor:'#ffffff', lyricFontWidth:0, lyricFontWeight:400,
-            hintColor:'rgba(255,255,255,0.6)'},
+            hintColor:'rgba(255,255,255,0.6)', outputDest:'live'},
     bible: {bg:'#000000', bgImage:null,
             refColor:'#9b59b6',
-            text:'#ffffff', verseFontWidth:0, verseFontWeight:400}
+            text:'#ffffff', verseFontWidth:0, verseFontWeight:400, outputDest:'live'}
   };
   // The content-area auto-fit ceiling (see presenter.html's FIT_MAX_CONTENT) —
   // always sent as-is now that there's no user font-size slider, so auto-fit
@@ -1202,9 +1187,27 @@
   // Bible, Sources) so each one's Preview → Live transition can be tuned on
   // its own (see Appearance panel's "Preview → Live Transition" section).
   // Also persisted.
+  //
+  // duration ("Switch Duration" in the UI) governs the TEXT-only animation
+  // used when a Song/Bible slide changes while that same presentation is
+  // already active in the target window (background stays fixed — see
+  // presenter.html's animateTextEls()); Transition's own internal Blank-first
+  // step (see activateBlank()/_blankDuration()) also reuses THIS value, never
+  // exitDuration. enterDuration ("Enter Duration") governs the separate
+  // whole-layer (background+text) fade-in used only when Song/Bible/Split
+  // content starts from an inactive/empty overlay (see presenter.html's
+  // showContent()/showSplit(), which pick one or the other based on the
+  // overlay's current state, never on whether a new slide was merely
+  // selected). exitDuration ("Exit Duration") governs the whole-layer fade-
+  // out used only when the user directly presses Blank (see activateBlank()/
+  // _blankDuration()) — never used for Transition's internal Blank, and
+  // never used at all for CUT (its Blank-first step is always fully instant
+  // via the pre-existing _instantTransferInFlight/_transInstant flag,
+  // regardless of any duration). Songs/Bible only — Sources has no Enter/
+  // Switch/Exit distinction, so it keeps just the one shared duration.
   var fadeSettings={
-    songs:  {duration:260,type:'fade',easing:'ease'},
-    bible:  {duration:260,type:'fade',easing:'ease'},
+    songs:  {duration:260,enterDuration:260,exitDuration:700,type:'fade',easing:'ease'},
+    bible:  {duration:260,enterDuration:260,exitDuration:700,type:'fade',easing:'ease'},
     sources:{duration:260,type:'fade',easing:'ease'}
   };
 
@@ -1230,6 +1233,8 @@
         ['songs','bible','sources'].forEach(function(cat){
           var s=savedFade[cat];if(!s)return;
           if(s.duration!=null)fadeSettings[cat].duration=s.duration;
+          if(s.enterDuration!=null)fadeSettings[cat].enterDuration=s.enterDuration;
+          if(s.exitDuration!=null)fadeSettings[cat].exitDuration=s.exitDuration;
           if(s.type)fadeSettings[cat].type=s.type;
           if(s.easing)fadeSettings[cat].easing=s.easing;
         });
@@ -1259,28 +1264,33 @@
     currentVerseIdx:-1,recentVerses:[],biblePanelTab:'verses',
     castActive:false, castDeviceName:null,
     preview:null, // the content currently shown on the real Preview surface (about to go live)
-    live:null      // {kind:'song',songId,stanzaIdx} | {kind:'bible',vn,bookN,ch,ver} | {kind:'source',sourceId} — what's actually on air
+    live:null,     // {kind:'song',songId,stanzaIdx} | {kind:'bible',vn,bookN,ch,ver} | {kind:'source',sourceId} — what's actually on air
+    // Whether the Bible Split Viewer currently has content pushed to the real
+    // Live/Preview surfaces — Split never goes through live/preview above (it
+    // is routed by pushSplitToPresenter() directly; see also tabAppearance.
+    // bible.outputDest, which now governs which ONE of the two it goes to),
+    // so Blank (activateBlank()) needs this separate flag to know it must
+    // also clear it. Set true by pushSplitToPresenter(), false by
+    // activateBlank(). splitDest records which surface ('preview'|'live')
+    // Split was last actually rendered to, so a later output-destination
+    // change can tell which surface is now stale and clear only that one.
+    splitActive:false,
+    splitDest:null
   };
   var pickerMode=''; var pickerAllItems=[];
 
   // ============================================================
-  // CAST STATUS + DEVICE PICKER
-  // ----------------------------------------------------------------------------
-  // This app's only real "connection" is Android's own DisplayManager Presentation
-  // API (see MainActivity.java) — there is no Bluetooth/WiFi/Cast-SDK peer discovery
-  // anywhere in this project (confirmed: zero Gradle dependencies, and the Sources
-  // tab's own "Wireless" source type already says as much). So:
-  //   - getAvailableDisplays() lists whatever the OS already knows about as a
-  //     presentation-capable display (a real Miracast/Cast receiver or HDMI output
-  //     already connected at the OS level) — real names, never invented ones.
-  //   - openCastSettings() hands off to the OS's own Cast/Wireless-Display settings,
-  //     since actual nearby-device discovery happens there, not inside this app.
-  //   - connectToDisplayId()/updateCastStatus()/onCastConnectFailed() mirror the
-  //     existing async native-bridge callback pattern already used everywhere else
-  //     in this file (see e.g. onPresenterViewport/receiveTheme).
+  // CAST STATUS — status-only display, not a button. This app's only real
+  // "connection" is Android's own DisplayManager Presentation API (see
+  // MainActivity.java): the OS itself auto-connects to a presentation-capable
+  // display as soon as one appears (connectToDisplay()/displayListener) and
+  // auto-disconnects when it goes away, reporting either transition here via
+  // updateCastStatus()/onPresenterStateChanged() — the same async native-bridge
+  // callback pattern used elsewhere in this file (see e.g. onPresenterViewport/
+  // receiveTheme). There is no nearby-device discovery/picker UI in this app —
+  // the header badge only ever mirrors whatever Android already knows is
+  // connected, using its real device name (never a fabricated one).
   // ============================================================
-  var _castKnownDevices=[];   // last getAvailableDisplays() result: [{id,name}]
-  var _castConnectingId=null; // device id currently mid-connection-attempt, or null
   function _truncateDeviceName(name){
     if(!name)return'';
     return name.length>6?(name.slice(0,6)+'...'):name;
@@ -1288,7 +1298,6 @@
   function updateCastStatus(active,deviceName){
     ctrlState.castActive=active;
     ctrlState.castDeviceName=active?(deviceName||null):null;
-    if(active)_castConnectingId=null; // a real connection landed — any "Connecting…" row is done
     var badge=document.getElementById('cast-status-badge');
     var label=document.getElementById('cast-status-label');
     if(active){
@@ -1305,108 +1314,8 @@
       label.textContent='Disconnected';
       badge.title='Disconnected';
     }
-    var discRow=document.getElementById('cast-devices-disconnect-row');
-    if(discRow)discRow.style.display=active?'':'none';
-    renderCastDevicesList();
   }
   function onPresenterStateChanged(isOpen){updateCastStatus(isOpen,isOpen?ctrlState.castDeviceName:null);}
-
-  function onCastStatusClick(){
-    openCastDevicesModal();
-    refreshCastDevices();
-  }
-  function openCastDevicesModal(){
-    var overlay=document.getElementById('cast-devices-overlay');
-    if(overlay)overlay.classList.add('open');
-    renderCastDevicesList();
-  }
-  function closeCastDevicesModal(){
-    var overlay=document.getElementById('cast-devices-overlay');
-    if(overlay)overlay.classList.remove('open');
-  }
-  function _safeParseDisplayList(json){
-    try{var arr=JSON.parse(json);return Array.isArray(arr)?arr:[];}catch(e){return[];}
-  }
-  function refreshCastDevices(){
-    var refreshBtn=document.getElementById('cast-devices-refresh-btn');
-    if(refreshBtn){refreshBtn.disabled=true;refreshBtn.textContent='Refreshing…';}
-    // Small delay purely so the loading state is actually perceptible — the native
-    // query itself is effectively instant (DisplayManager already tracks this).
-    setTimeout(function(){
-      _castKnownDevices=(window.Android&&typeof window.Android.getAvailableDisplays==='function')
-        ? _safeParseDisplayList(window.Android.getAvailableDisplays()) : [];
-      renderCastDevicesList();
-      if(refreshBtn){refreshBtn.disabled=false;refreshBtn.textContent='Refresh';}
-    },260);
-  }
-  function _setCastNote(text,isWarn){
-    var note=document.getElementById('cast-devices-note');
-    if(!note)return;
-    if(!text){note.style.display='none';return;}
-    note.style.display='';
-    note.className=isWarn===false?'add-source-note':'add-source-note warn';
-    note.textContent=text;
-  }
-  function renderCastDevicesList(){
-    var list=document.getElementById('cast-devices-list');
-    if(!list)return;
-    if(!window.Android||typeof window.Android.getAvailableDisplays!=='function'){
-      list.innerHTML='';
-      _setCastNote('Device discovery is only available inside the Android app shell.');
-      return;
-    }
-    if(!_castKnownDevices.length){
-      list.innerHTML='';
-      _setCastNote("No connected displays found. This app can't scan for nearby devices itself — use Cast Settings below (or your system Quick Settings) to pair one, then tap Refresh.");
-      return;
-    }
-    _setCastNote(null);
-    list.innerHTML=_castKnownDevices.map(function(d){
-      var isConnected=ctrlState.castActive&&ctrlState.castDeviceName===d.name;
-      var isConnecting=_castConnectingId===d.id;
-      var cls='device-item'+(isConnected?' active':'');
-      var label=escH(d.name||('Display '+d.id));
-      if(isConnecting)label+=' — Connecting…';
-      else if(isConnected)label+=' — Connected';
-      return '<div class="'+cls+'" onclick="connectToCastDevice('+JSON.stringify(d.id)+')">'+label+'</div>';
-    }).join('');
-  }
-  function connectToCastDevice(id){
-    if(!window.Android||typeof window.Android.connectToDisplayId!=='function')return;
-    _castConnectingId=id;
-    _setCastNote(null);
-    renderCastDevicesList();
-    var started=window.Android.connectToDisplayId(id);
-    if(!started){
-      _castConnectingId=null;
-      _setCastNote('That display is no longer available. Try Refresh.');
-      renderCastDevicesList();
-    }
-    // On success, updateCastStatus(true,name) arrives asynchronously from Android.
-    // On failure, onCastConnectFailed(name) arrives instead — see below. Either way
-    // the user stays in this picker; the main button is never updated speculatively.
-  }
-  function onCastConnectFailed(deviceName){
-    _castConnectingId=null;
-    _setCastNote('Could not connect to '+(deviceName||'that display')+'. It may have disconnected — try Refresh.');
-    renderCastDevicesList();
-  }
-  // Explicit Disconnect — Android's disconnectDisplay() does the actual
-  // permission-scoped display teardown (dismissPresentation()) and reports the
-  // result back through the exact same updateCastStatus(false,null) callback
-  // already used everywhere else (OS-initiated drops included), so there's
-  // nothing to update speculatively here.
-  function disconnectCastDevice(){
-    if(!window.Android||typeof window.Android.disconnectDisplay!=='function')return;
-    window.Android.disconnectDisplay();
-  }
-  function openSystemCastSettings(){
-    if(!window.Android||typeof window.Android.openCastSettings!=='function')return;
-    var opened=window.Android.openCastSettings();
-    if(!opened){
-      _setCastNote("This device doesn't expose Cast/Wireless Display settings to apps. Open your system Quick Settings and use Cast/Smart View to pair a display, then tap Refresh here.");
-    }
-  }
 
   // ============================================================
   // SCREEN INDICATOR
@@ -1477,14 +1386,19 @@
   // briefly sets _instantTransferInFlight around its one goLive() call so THIS
   // specific screen change skips presenter.html's animation entirely, without
   // touching fadeSettings/the configured type-duration-easing at all.
+  // enterMs falls back to fs.duration when a category has no dedicated
+  // enterDuration (Sources — see fadeSettings above), so the bridge call
+  // always gets a real number rather than undefined.
   function _syncFrameTransition(iframeId){
     var fs=fadeSettings[_currentTransitionCategory()]||fadeSettings.songs;
-    _runFrameCall(iframeId,'setSlideTransition',[fs.type,fs.duration,fs.easing,_instantTransferInFlight]);
+    var enterMs=fs.enterDuration!=null?fs.enterDuration:fs.duration;
+    _runFrameCall(iframeId,'setSlideTransition',[fs.type,fs.duration,fs.easing,_instantTransferInFlight,enterMs]);
   }
   function _syncAndroidTransition(){
     if(window.Android&&typeof window.Android.setTransition==='function'){
       var fs=fadeSettings[_currentTransitionCategory()]||fadeSettings.songs;
-      window.Android.setTransition(fs.type,fs.duration,fs.easing,_instantTransferInFlight);
+      var enterMs=fs.enterDuration!=null?fs.enterDuration:fs.duration;
+      window.Android.setTransition(fs.type,fs.duration,fs.easing,_instantTransferInFlight,enterMs);
     }
   }
 
@@ -1501,10 +1415,22 @@
     if(fnName==='updateFontSize'&&args.length)_lastPresenterFontSize=args[0];
     return _runFrameCall('presenter-iframe',fnName,args);
   }
+  // Re-applies the last known content to the presenter-iframe — used only to
+  // restore state after the iframe itself was reloaded (its 'load' event;
+  // see initPresenterPreview() below), which happens when it's relocated in
+  // the DOM by openHoldPreview()/_restoreHoldPreviewSource() (the Enlarged
+  // View window), and once on initial page load. This is never a genuine new
+  // selection, so it must always show the current content immediately with
+  // no Enter/Switch/Exit/fade animation — forcing instant for just this one
+  // sync call (then restoring _instantTransferInFlight exactly as it was,
+  // same try/finally pattern as cutPreviewToLive()) achieves that without
+  // touching fadeSettings/Enter/Switch/Exit Duration or any other call site.
   function replayPresenterPreview(){
     syncPreviewScale();
     if(_lastPresenterCall){
-      _syncFrameTransition('presenter-iframe');
+      var prevInstant=_instantTransferInFlight;
+      _instantTransferInFlight=true;
+      try{ _syncFrameTransition('presenter-iframe'); } finally { _instantTransferInFlight=prevInstant; }
       _runFrameCall('presenter-iframe',_lastPresenterCall.fnName,_lastPresenterCall.args.slice());
       if(_lastPresenterFontSize!==null)_runFrameCall('presenter-iframe','updateFontSize',[_lastPresenterFontSize]);
     }
@@ -1528,10 +1454,13 @@
     if(fnName==='updateFontSize'&&args.length)_lastPreviewFontSize=args[0];
     return _runFrameCall('preview-iframe',fnName,args);
   }
+  // Same reasoning as replayPresenterPreview() above, for the preview-iframe.
   function replayPreviewFrame(){
     syncPreviewScale();
     if(_lastPreviewCall){
-      _syncFrameTransition('preview-iframe');
+      var prevInstant=_instantTransferInFlight;
+      _instantTransferInFlight=true;
+      try{ _syncFrameTransition('preview-iframe'); } finally { _instantTransferInFlight=prevInstant; }
       _runFrameCall('preview-iframe',_lastPreviewCall.fnName,_lastPreviewCall.args.slice());
       if(_lastPreviewFontSize!==null)_runFrameCall('preview-iframe','updateFontSize',[_lastPreviewFontSize]);
     }
@@ -1544,12 +1473,16 @@
   }
 
   // ============================================================
-  // PRESENT NOW — Songs and normal Bible present immediately to LIVE ONLY: the
-  // selected slide/verse goes straight to goLive() via an explicit payload,
-  // never touching ctrlState.preview/the Preview monitor. Preview is reserved
-  // for Source management (see stageSourceToPreview/sendSourceLive below) —
-  // Sources are the only thing that still stage through setPreview() first.
-  // (The Split tab bypasses this pattern entirely — see BIBLE SPLIT below.)
+  // PRESENT NOW — Songs and normal Bible present immediately, straight to
+  // goLive() via an explicit payload (never reading/touching ctrlState.preview
+  // itself). By default this still means LIVE ONLY, same as originally: Preview
+  // is otherwise reserved for Source management (see stageSourceToPreview/
+  // sendSourceLive below), which is the only thing that stages through
+  // setPreview() first. The Appearance panel's Preview/Live output-destination
+  // radio (see _presentSongBible() below) is the one deliberate exception: when
+  // a category is set to "Preview", its content is staged via setPreview()
+  // instead of going through here. (The Split tab bypasses this pattern
+  // entirely — see BIBLE SPLIT below.)
   // ============================================================
   function setPreview(payload){
     ctrlState.preview=payload;
@@ -1577,12 +1510,19 @@
   // Preview's last content onto Live) — the original behavior for those.
   function goLive(payload){
     var s=payload||ctrlState.preview;if(!s)return;
+    // Force the transition category from s.kind itself — the one thing we
+    // know for certain here — instead of letting _currentTransitionCategory()
+    // guess from ctrlState.preview (which, for a direct explicit payload, may
+    // still hold something unrelated, e.g. a Source staged earlier for
+    // Transition/CUT). See _categoryOverride's own comment above.
+    _categoryOverride=(s.kind==='song')?'songs':(s.kind==='bible')?'bible':(s.kind==='source')?'sources':null;
     // presenterCall() first: it syncs the current transition (see
     // _syncAndroidTransition()) to the real cast display before the Android
     // bridge call below actually changes what's on screen there, so that
     // change picks up the right transition instead of the previous one.
     presenterCall(s.presenterFn,s.presenterArgs);
     if(window.Android&&typeof window.Android[s.androidFn]==='function')window.Android[s.androidFn].apply(window.Android,s.androidArgs);
+    _categoryOverride=null;
     if(s.kind==='song'){
       ctrlState.live={kind:'song',songId:s.songId,stanzaIdx:s.stanzaIdx};
       updateScreenIndicator('song',s.indicatorDetail);
@@ -1603,6 +1543,25 @@
     }
   }
   function presentNow(payload){goLive(payload);}
+
+  // Routes a Song/Bible payload to whichever surface the Appearance panel's
+  // Preview/Live output-destination radio currently selects for that category
+  // (tabAppearance[tab].outputDest — see _fabOutputDestRow()/onOutputDestChange()
+  // below) instead of PRESENT NOW's Live-only default above. 'live' (the
+  // default, preserving original behavior) goes straight through presentNow()/
+  // goLive() exactly as before. 'preview' stages the exact same payload via
+  // setPreview() instead — the real Android cast bridge call (Live-only) is
+  // never reached, so Live is left completely untouched and only the Preview
+  // surface shows it, reusing the same staging path Sources already use.
+  function _presentSongBible(payload,tab){
+    var dest=(tabAppearance[tab]&&tabAppearance[tab].outputDest)||'live';
+    if(dest==='preview'){
+      setPreview(payload);
+      if(payload.kind==='bible')recordRecentVerse({ref:payload.ref,text:payload.text,vn:payload.vn,bookN:payload.bookN,ch:payload.ch,ver:payload.ver});
+    } else {
+      presentNow(payload);
+    }
+  }
 
   // ============================================================
   // SWAP / TRANSITION / CUT — Live/Preview monitor controls.
@@ -1665,13 +1624,24 @@
     slide: {out:'translateX(24px)', into:'translateX(0)'},
     zoom:  {out:'scale(.92)',       into:'scale(1)'}
   };
-  // Which category's Preview → Live Transition settings govern the transition
-  // currently in flight — Songs/Bible/Sources are fully independent (see
-  // fadeSettings above). Preview's own staged content is the primary signal
-  // (kind:'song'|'bible'|'source'); content that bypasses staging (Split
-  // Bible pushes straight to both surfaces) falls back to whichever tab is
-  // currently active, since that's always where such content lives.
+  // Which category's own Appearance-configured Transition settings (duration/
+  // type/easing — see fadeSettings above, edited from within each tab's own
+  // Appearance popup) govern the transition currently in flight. _categoryOverride
+  // is a one-shot flag — set immediately before a call whose real category is
+  // already known for certain (goLive()'s payload.kind, or pushSplitToPresenter(),
+  // which is always Bible), and cleared right after — that takes precedence over
+  // the fallback inference below. That fallback (ctrlState.preview.kind, then
+  // getCurrentTab()) is only reliable for content that's actually staged THROUGH
+  // ctrlState.preview (Sources, and Song/Bible when routed to the Preview output
+  // destination — see _presentSongBible()); reading it for goLive()'s direct-to-
+  // Live Song/Bible path or for Split (neither of which ever touch
+  // ctrlState.preview) could pick up a stale, unrelated kind left over from
+  // whatever was last staged there (e.g. a Source queued for Transition/CUT),
+  // leaking ITS duration into an unrelated Song/Bible/Split transition — which is
+  // exactly what _categoryOverride prevents.
+  var _categoryOverride=null;
   function _currentTransitionCategory(){
+    if(_categoryOverride)return _categoryOverride;
     var k=ctrlState.preview&&ctrlState.preview.kind;
     if(k==='song')return 'songs';
     if(k==='bible')return 'bible';
@@ -1709,20 +1679,38 @@
     }
   }
   function fadePreviewToLive(){_transferPreviewToLive(true);}
-  function transferPreviewToLive(){_transferPreviewToLive(false);}
+  // Transition (#btn-transfer) always runs the existing Blank action first —
+  // reusing activateBlank() as-is, never duplicating its clearing logic — so any
+  // Song/Bible currently on Live/Preview is cleared before the transfer happens.
+  // activateBlank(true) tells it this is the Transition-triggered Blank, not a
+  // direct user click — see _blankDuration()'s own comment: it must reuse the
+  // Song/Bible category's normal Switch/Transition duration (fadeSettings[cat].
+  // duration) instead of Exit Duration for this one internal call.
+  // activateBlank() is a synchronous, fire-and-forget call (same as everywhere
+  // else it's used), so this introduces no async wait/race between the two steps.
+  function transferPreviewToLive(){
+    activateBlank(true);
+    _transferPreviewToLive(false);
+  }
   // CUT — reuses the exact same immediate (non-animated) transfer path as
-  // Transition/transferPreviewToLive() above (same goLive()/apply(), same
-  // Sources-only content it already operates on); the ONLY difference is that
-  // _instantTransferInFlight is set for the duration of that one call, which
-  // _syncFrameTransition()/_syncAndroidTransition() (above) pick up and forward
-  // to presenter.html as a one-shot "skip animateLayer() entirely" flag — see
-  // presenter.html's _transInstant. This never reads or modifies fadeSettings,
-  // so the configured Transition type/duration/easing is completely untouched
-  // and Transition itself keeps behaving exactly as before.
+  // Transition/transferPreviewToLive() above (same Blank-first step, same
+  // goLive()/apply(), same Sources-only content it already operates on); the
+  // ONLY difference is that _instantTransferInFlight is set for the duration of
+  // that one call, which _syncFrameTransition()/_syncAndroidTransition() (above)
+  // pick up and forward to presenter.html as a one-shot "skip animateLayer()
+  // entirely" flag — see presenter.html's _transInstant. This never reads or
+  // modifies fadeSettings, so the configured Transition type/duration/easing is
+  // completely untouched and Transition itself keeps behaving exactly as before.
+  // Its Blank-first step (transferPreviewToLive() -> activateBlank(true)) still
+  // resolves a normal, non-zero ms per _blankDuration(), but presenter.html's
+  // clearOverlay() checks _transInstant before ever looking at that ms and
+  // skips all animation/duration entirely when it's true — exactly like every
+  // other screen-changing call already does for CUT, so no separate 0-duration
+  // case is needed here.
   function cutPreviewToLive(){
     _instantTransferInFlight=true;
     try{
-      transferPreviewToLive();
+      transferPreviewToLive(); // runs Blank first, then the instant transfer
     } finally {
       _instantTransferInFlight=false;
     }
@@ -2021,7 +2009,13 @@
     var swapBtn=document.getElementById('btn-swap');
     var cutBtn=document.getElementById('btn-fade');
     var transitionBtn=document.getElementById('btn-transfer');
-    if(blankBtn)blankBtn.addEventListener('click',activateBlank);
+    // Never pass activateBlank directly as the listener — addEventListener
+    // calls it with the click Event as the first argument, which
+    // activateBlank(viaTransition) would then treat as a truthy
+    // viaTransition, wrongly taking the Transition-context (Switch Duration)
+    // branch in _blankDuration() for every direct Blank click instead of the
+    // category's own Exit Duration.
+    if(blankBtn)blankBtn.addEventListener('click',function(){activateBlank();});
     if(swapBtn)swapBtn.addEventListener('click',toggleSwapLivePreview);
     if(cutBtn)cutBtn.addEventListener('click',cutPreviewToLive);
     if(transitionBtn)transitionBtn.addEventListener('click',transferPreviewToLive);
@@ -2163,30 +2157,102 @@
     goLive();
   }
 
-  // ---- BLANK quick action (Cast Control, next to Swap) — clears ONLY a
-  // currently-live Song/Bible presentation from LIVE; it must never touch
-  // Sources (list, management, or whatever's staged in Preview) and must never
-  // touch Preview at all. presenter.html now renders Sources and Song/Bible as
-  // two independent layers (see its LAYER ARCHITECTURE comment) — Sources is
-  // the permanent base layer, Song/Bible is an overlay drawn on top — so
-  // Blank calls the overlay-only clearOverlay() (presenter.html), NOT
-  // showGap('blank',...) (which would instead replace whatever Source is on
-  // the base layer). clearOverlay() never touches ctrlState.preview or
-  // sourcesState, and never assigns ctrlState.live={kind:'source',...} — it's
-  // a pure "hide the overlay" call, applied straight to Live only, exactly
-  // like goLive() does. If Live isn't currently showing a Song or Bible slide
-  // (e.g. a Source is live, or nothing is), there is nothing for Blank to do.
-  // ----
-  function activateBlank(){
-    if(!ctrlState.live||(ctrlState.live.kind!=='song'&&ctrlState.live.kind!=='bible'))return;
-    presenterCall('clearOverlay',[]);
-    if(window.Android&&typeof window.Android.clearOverlay==='function')window.Android.clearOverlay();
-    var wasKind=ctrlState.live.kind;
-    ctrlState.live=null;
-    updateScreenIndicator('blank');
-    if(wasKind==='song')renderStanzaList();
-    else if(ctrlState.biblePanelTab==='recent')renderCtrlVerses();
-    else refreshVerseLiveTags();
+  // Resets the Bible Split Viewer's OWN selection state (both sides) and, if
+  // the Split tab happens to be the one currently open, re-renders it so the
+  // "selected" highlight/verse text goes back to its empty ("Select a verse")
+  // state too — called by activateBlank() below so nothing stale survives in
+  // splitState to later be re-pushed to the presenter by an unrelated call.
+  function clearSplitState(){
+    ['L','R'].forEach(function(side){
+      splitState[side].selVn=null;splitState[side].ref=null;splitState[side].text=null;
+    });
+    if(ctrlState.biblePanelTab==='split')renderCtrlSplitPanel();
+  }
+
+  // Resolves how long THIS Blank call's fade-out should take for category
+  // cat ('songs'|'bible'), given the context it's running in:
+  //   direct (viaTransition falsy) — the user pressed Blank itself: use that
+  //     category's own Exit Duration (fadeSettings[cat].exitDuration).
+  //   viaTransition true — Transition's own internal Blank-first step (see
+  //     transferPreviewToLive() below): must NOT use Exit Duration at all —
+  //     reuse the exact same duration Transition already uses for its own
+  //     transfer (fadeSettings[cat].duration, i.e. "Switch Duration").
+  // CUT needs no special case here: it reaches this same 'transition'
+  // context (cutPreviewToLive() calls transferPreviewToLive()), but its
+  // truly-instant behavior comes entirely from the pre-existing
+  // _instantTransferInFlight/_transInstant one-shot flag — presenter.html's
+  // clearOverlay() already checks that FIRST and skips animation/duration
+  // entirely regardless of whatever ms this resolves to, exactly like every
+  // other screen-changing call already does for CUT.
+  function _blankDuration(cat,viaTransition){
+    var fs=fadeSettings[cat]||fadeSettings.songs;
+    if(viaTransition)return fs.duration;
+    return fs.exitDuration!=null?fs.exitDuration:fs.duration;
+  }
+  // ---- BLANK quick action (Cast Control, next to Swap) — clears any
+  // currently-showing Song/Bible presentation (single-slide OR the Bible
+  // Split Viewer) from BOTH Live and Preview; it must never touch Sources
+  // (list, management, or whatever's staged in Preview) at all. presenter.html
+  // renders Sources and Song/Bible as two independent layers (see its LAYER
+  // ARCHITECTURE comment) — Sources is the permanent base layer, Song/Bible
+  // (single slide AND Split both live on this one overlay layer/background —
+  // see presenter.html's showSplit()) is an overlay drawn on top — so Blank
+  // calls the overlay-only clearOverlay() (presenter.html) on whichever
+  // surface(s) actually hold Song/Bible content, NOT showGap('blank',...)/
+  // clearDisplay() (which would instead touch the Sources base layer). Preview
+  // now holds Song/Bible content too when the Appearance "Preview" output
+  // destination is selected (see setPreview()/_presentSongBible() below) — a
+  // Source staged in Preview (ctrlState.preview.kind==='source') is left
+  // completely untouched either way.
+  //
+  // Split is architecturally separate from the single-slide Song/Bible flow
+  // above — it pushes straight to BOTH the Live and Preview surfaces the
+  // instant a verse is selected (see pushSplitToPresenter()), never through
+  // ctrlState.live/preview — so liveSB/previewSB below can't see it at all;
+  // ctrlState.splitActive (set by pushSplitToPresenter(), cleared here) is
+  // this function's only signal that Split needs clearing too. clearOverlay()
+  // is always safe to call again even if liveSB/previewSB already called it
+  // for an unrelated reason, so there's no double-clear risk either way.
+  //
+  // viaTransition (optional, default false) — see _blankDuration() above.
+  // Never duplicated: this ONE function still runs the exact same clearing
+  // logic either way, just resolving a different ms per call site.
+  function activateBlank(viaTransition){
+    var liveSB=ctrlState.live&&(ctrlState.live.kind==='song'||ctrlState.live.kind==='bible');
+    var previewSB=ctrlState.preview&&(ctrlState.preview.kind==='song'||ctrlState.preview.kind==='bible');
+    var splitOn=ctrlState.splitActive;
+    if(!liveSB&&!previewSB&&!splitOn)return;
+    var touchedSong=false,touchedBible=false;
+    if(liveSB){
+      var liveCat=ctrlState.live.kind==='song'?'songs':'bible';
+      var liveMs=_blankDuration(liveCat,viaTransition);
+      presenterCall('clearOverlay',[liveMs]);
+      if(window.Android&&typeof window.Android.clearOverlay==='function')window.Android.clearOverlay(liveMs);
+      if(ctrlState.live.kind==='song')touchedSong=true;else touchedBible=true;
+      ctrlState.live=null;
+      updateScreenIndicator('blank');
+    }
+    if(previewSB){
+      var prevCat=ctrlState.preview.kind==='song'?'songs':'bible';
+      previewCall('clearOverlay',[_blankDuration(prevCat,viaTransition)]);
+      if(ctrlState.preview.kind==='song')touchedSong=true;else touchedBible=true;
+      ctrlState.preview=null;
+      var bar=document.getElementById('stage-bar-text');if(bar)bar.textContent='Nothing shown yet';
+    }
+    if(splitOn){
+      var splitMs=_blankDuration('bible',viaTransition);
+      if(!liveSB){
+        presenterCall('clearOverlay',[splitMs]);
+        if(window.Android&&typeof window.Android.clearOverlay==='function')window.Android.clearOverlay(splitMs);
+      }
+      if(!previewSB)previewCall('clearOverlay',[splitMs]);
+      clearSplitState();
+      ctrlState.splitActive=false;
+      ctrlState.splitDest=null;
+      touchedBible=true;
+    }
+    if(touchedSong)renderStanzaList();
+    if(touchedBible){if(ctrlState.biblePanelTab==='recent')renderCtrlVerses();else refreshVerseLiveTags();}
   }
 
   function renameSource(id){
@@ -2605,8 +2671,9 @@
     document.getElementById('stanza-pos').textContent=(ctrlState.currentStanzaIdx+1)+' / '+stanzas.length;
   }
 
-  // Selecting a song slide presents it immediately — Preview and Live update
-  // together in one step, with no separate Go Live action for normal Songs.
+  // Selecting a song slide presents it immediately, with no separate Go Live
+  // step — routed to Preview or Live per tabAppearance.songs.outputDest (see
+  // _presentSongBible() above; default 'live' matches the original behavior).
   function showStanza(idx){
     var song=songs.find(function(s){return s.id===ctrlState.currentSongId;});if(!song)return;
     ctrlState.currentStanzaIdx=idx;
@@ -2617,12 +2684,12 @@
     var fs=AUTO_CONTENT_FONT_SIZE;
     var title=song.number+'. '+song.titleTamil;
     var part=ctrlState.currentStanzas[idx];if(!part)return;
-    presentNow({
+    _presentSongBible({
       kind:'song',songId:song.id,stanzaIdx:idx,label:title+' — '+part.label,
       androidFn:'showStanza',androidArgs:[title,part.text,bg,tc,lc,fs,part.hint||'',hc],
       presenterFn:'showContent',presenterArgs:['song',title,part.text,bg,tc,lc,fs,part.hint||'',hc],
       indicatorDetail:song.number+'. '+song.titleTamil
-    });
+    },'songs');
     _applyHeadingBodyStyle('songs');
     renderStanzaList();
   }
@@ -2769,9 +2836,11 @@
 
   function updateBibleNavBar(){var verses=ctrlState.bibleVerses;var idx=verses.findIndex(function(v){return v.n===ctrlState.currentVerseIdx;});if(idx<0)idx=0;document.getElementById('bible-pos').textContent=(idx+1)+' / '+verses.length;}
 
-  // Selecting a normal-Bible verse presents it immediately (Preview + Live together,
-  // no separate Go Live step) and never rebuilds the verse list — see
-  // refreshVerseLiveTags(), called from goLive() via presentNow().
+  // Selecting a normal-Bible verse presents it immediately (no separate Go Live
+  // step) and never rebuilds the verse list — see refreshVerseLiveTags(), called
+  // from goLive() via _presentSongBible()/presentNow(). Routed to Preview or
+  // Live per tabAppearance.bible.outputDest (see _presentSongBible() above;
+  // default 'live' matches the original behavior).
   function showVerse(vn){
     var v=ctrlState.bibleVerses.find(function(x){return x.n===vn;});if(!v)return;
     ctrlState.currentVerseIdx=vn;
@@ -2779,12 +2848,12 @@
     var bookName=isTamil?TAMIL_BOOKS[ctrlState.bibleBook-1]:BIBLE_BOOKS[ctrlState.bibleBook-1].n;
     var ref=bookName+' '+ctrlState.bibleChapter+':'+vn+' ('+ctrlState.bibleVersion+')';
     var bg=getBibleBG();var fg=tabAppearance.bible.text;var rc=tabAppearance.bible.refColor;var fs=AUTO_CONTENT_FONT_SIZE;
-    presentNow({
+    _presentSongBible({
       kind:'bible',vn:vn,bookN:ctrlState.bibleBook,ch:ctrlState.bibleChapter,ver:ctrlState.bibleVersion,ref:ref,text:v.t,label:ref,
       androidFn:'showVerse',androidArgs:[ref,v.t,bg,rc,fg,fs],
       presenterFn:'showContent',presenterArgs:['bible',ref,v.t,bg,rc,fg,fs],
       indicatorDetail:bookName+' '+ctrlState.bibleChapter+':'+vn
-    });
+    },'bible');
     _applyHeadingBodyStyle('bible');
     updateBibleNavBar();
   }
@@ -2913,15 +2982,48 @@
     pushSplitToPresenter();
   }
 
+  // Routes the Split Viewer to whichever ONE surface Bible's own Preview/Live
+  // output destination selects (tabAppearance.bible.outputDest — the exact
+  // same state Bible Single already uses, see _presentSongBible()), instead
+  // of always pushing to both. The Android bridge call (the real external
+  // cast display) only ever mirrors Live, so it's skipped entirely when the
+  // destination is Preview — matching how goLive()/setPreview() already
+  // split that behavior for single-slide content. If the destination
+  // changed since the last call (ctrlState.splitDest), the surface no longer
+  // selected is explicitly cleared so stale Split content never lingers
+  // there — also called directly from onOutputDestChange() so flipping the
+  // radio alone (with no new verse pick) still re-routes immediately.
   function pushSplitToPresenter(){
     var bg=getBibleBG();var fg=tabAppearance.bible.text;var rc=tabAppearance.bible.refColor;var fs=AUTO_CONTENT_FONT_SIZE;
     var leftRef=splitState.L.ref||'',leftText=splitState.L.text||'Select a verse';
     var rightRef=splitState.R.ref||'',rightText=splitState.R.text||'Select a verse';
     var args=[leftRef,leftText,rightRef,rightText,bg,rc,fg,fs];
-    presenterCall('showSplit',args);
-    previewCall('showSplit',args);
-    if(window.Android&&typeof window.Android.showSplit==='function')window.Android.showSplit(leftRef,leftText,rightRef,rightText,bg,rc,fg,fs);
-    updateScreenIndicator('bible',(splitState.L.ref||'—')+'  |  '+(splitState.R.ref||'—'));
+    var label=(splitState.L.ref||'—')+'  |  '+(splitState.R.ref||'—');
+    var dest=tabAppearance.bible.outputDest||'live';
+    // Split is always Bible content — force the category rather than letting
+    // _currentTransitionCategory() infer it from ctrlState.preview, which
+    // Split never touches and which may still hold something unrelated (e.g.
+    // a Source staged earlier for Transition/CUT). See _categoryOverride.
+    _categoryOverride='bible';
+    if(dest==='preview'){
+      previewCall('showSplit',args);
+      var bar=document.getElementById('stage-bar-text');if(bar)bar.textContent=label;
+      if(ctrlState.splitActive&&ctrlState.splitDest==='live'){
+        // Instant — this is a destination-change housekeeping clear, not a
+        // user Blank gesture, so it uses neither Exit nor Switch/Transition
+        // duration (see activateBlank()/_blankDuration()'s own contexts).
+        presenterCall('clearOverlay',[0]);
+        if(window.Android&&typeof window.Android.clearOverlay==='function')window.Android.clearOverlay(0);
+      }
+    } else {
+      presenterCall('showSplit',args);
+      if(window.Android&&typeof window.Android.showSplit==='function')window.Android.showSplit(leftRef,leftText,rightRef,rightText,bg,rc,fg,fs);
+      updateScreenIndicator('bible',label);
+      if(ctrlState.splitActive&&ctrlState.splitDest==='preview')previewCall('clearOverlay',[0]);
+    }
+    _categoryOverride=null;
+    ctrlState.splitActive=true;
+    ctrlState.splitDest=dest;
   }
 
   // ============================================================
@@ -3250,10 +3352,52 @@
       opts.map(function(o){return '<button class="fab-type-btn'+(val===o.v?' active':'')+'" onclick="onContentFontWeightChange(\''+tab+'\',\''+field+'\','+o.v+')">'+o.label+'</button>';}).join('')+
     '</div>';
   }
+  // Output-destination radios — decide which real monitor surface (Preview or
+  // Live) showStanza()/showVerse() route new Songs/Bible content to; see
+  // _presentSongBible() and tabAppearance[tab].outputDest above. Custom-styled
+  // (not a native <input type=radio>) to match the app's broadcast-control
+  // language; only one of the two can ever be active per tab, and Songs/Bible
+  // are fully independent of each other (each reads/writes its own tab's field).
+  function _fabOutputDestRow(tab){
+    var val=tabAppearance[tab].outputDest||'live';
+    var opts=[{v:'preview',label:'Preview'},{v:'live',label:'Live'}];
+    return '<div class="fab-section"><div class="fab-section-label">Output Destination</div>'+
+      '<div class="fab-radio-row">'+opts.map(function(o){
+        return '<div class="fab-radio-opt'+(val===o.v?' active':'')+'" role="radio" aria-checked="'+(val===o.v)+'" onclick="onOutputDestChange(\''+tab+'\',\''+o.v+'\')">'+
+          '<span class="fab-radio-dot"></span>'+escH(o.label)+'</div>';
+      }).join('')+'</div></div>';
+  }
+  function onOutputDestChange(tab,val){
+    if(!tabAppearance[tab]||(val!=='preview'&&val!=='live'))return;
+    tabAppearance[tab].outputDest=val;
+    saveTabAppearance();
+    // The Split Viewer (tab==='bible' only — Songs has no split concept) is
+    // pushed immediately to BOTH surfaces once a verse is selected (see
+    // pushSplitToPresenter()), so unlike a single Song/Bible slide it can be
+    // actively showing right now without anything else re-triggering — the
+    // destination toggle itself has to re-route it immediately, or its old
+    // surface would keep showing stale content indefinitely.
+    if(tab==='bible'&&ctrlState.splitActive)pushSplitToPresenter();
+    if(document.getElementById('appear-fab-popup').style.display!=='none')renderFabPopupContent(tab);
+  }
   var FADE_EASINGS=[{id:'ease',label:'Ease'},{id:'ease-in',label:'Ease In'},{id:'ease-out',label:'Ease Out'},{id:'ease-in-out',label:'Ease In-Out'},{id:'linear',label:'Linear'}];
   function _fabFadeSectionHtml(tab){
     var fs=fadeSettings[tab]||fadeSettings.songs;
     var types=[{id:'fade',label:'Fade'},{id:'slide',label:'Slide'},{id:'zoom',label:'Zoom'}];
+    // Songs/Bible get THREE independent duration controls — Enter (whole
+    // presentation fade-in, used only when starting from an inactive
+    // overlay — see presenter.html's showContent()/showSplit()), Switch
+    // (text-only, used while that same presentation is already active; also
+    // reused for Transition's own internal Blank-first step), and Exit (the
+    // whole-layer fade-out used only when the user directly presses Blank —
+    // see activateBlank()/_blankDuration()). Sources has no such distinction,
+    // so it keeps the single original "Duration" control under its original
+    // id/handler, unchanged.
+    var durationRows=(tab==='songs'||tab==='bible')
+      ? _fabRangeRow('Enter Duration','fab-fade-duration-enter',0,5000,fs.enterDuration,'ms',"onFadeEnterDurationChange('"+tab+"',this.value)")+
+        _fabRangeRow('Switch Duration','fab-fade-duration-switch',0,5000,fs.duration,'ms',"onFadeDurationChange('"+tab+"',this.value)")+
+        _fabRangeRow('Exit Duration','fab-fade-duration-exit',0,5000,fs.exitDuration,'ms',"onFadeExitDurationChange('"+tab+"',this.value)")
+      : _fabRangeRow('Duration','fab-fade-duration',0,5000,fs.duration,'ms',"onFadeDurationChange('"+tab+"',this.value)");
     // Easing picker reuses the exact .split-picker/.split-dropdown component from
     // Bible → Split Tab → Version (see splitPanelBarHtml()/toggleSplitCtrlDropdown()
     // above) instead of a native <select>, so it looks and behaves identically.
@@ -3262,7 +3406,7 @@
     var easingItems=FADE_EASINGS.map(function(e){return '<div class="split-dropdown-item'+(fs.easing===e.id?' active':'')+'" onclick="onFadeEasingChange(\''+tab+'\',\''+e.id+'\')">'+escH(e.label)+'</div>';}).join('');
     var easingPickerId='fab-easing-picker-'+tab;
     return '<div class="fab-divider"></div><div class="fab-section"><div class="fab-section-label">Preview → Live Transition</div>'+
-      _fabRangeRow('Duration','fab-fade-duration',0,5000,fs.duration,'ms',"onFadeDurationChange('"+tab+"',this.value)")+
+      durationRows+
       '<div class="fab-type-row" style="margin-top:6px;">'+types.map(function(t){return '<button class="fab-type-btn'+(fs.type===t.id?' active':'')+'" onclick="onFadeTypeChange(\''+tab+'\',\''+t.id+'\')">'+t.label+'</button>';}).join('')+'</div>'+
       '<div class="fab-select-row"><label>Easing</label><div class="split-picker" id="'+easingPickerId+'">'+
         '<div class="split-picker-btn" onclick="toggleSplitCtrlDropdown(\''+easingPickerId+'\')"><span>'+escH(easingLabel)+'</span>'+easingArr+'</div>'+
@@ -3286,6 +3430,7 @@
       html+='<div class="fab-section"><div class="fab-section-label">Song Viewer</div>'+
         '<div class="appearance-btn-row">'+_fabColorChip('songs','bg','Background')+'</div>'+
       '</div>';
+      html+=_fabOutputDestRow('songs');
     } else if(tab==='bible'){
       html+='<div class="fab-section"><div class="fab-section-label">Bible Reference</div>'+
         '<div class="appearance-btn-row">'+_fabColorChip('bible','refColor','Reference Color')+'</div>'+
@@ -3295,6 +3440,7 @@
         _fabRangeRow('Letter Spacing','fab-bible-verse-ls',-4,20,tabAppearance.bible.verseFontWidth,'px',"_fabRangeChange('bible','verseFontWidth',this.value,'fab-bible-verse-ls-val','px')")+
         '<div class="appearance-btn-row" style="margin-top:6px;">'+_fabColorChip('bible','text','Verse Text Color')+_fabColorChip('bible','bg','Background')+'</div>'+
       '</div>';
+      html+=_fabOutputDestRow('bible');
     } else {
       // Sources/Idle Screen has no text content, so only Background applies —
       // no font weight/letter-spacing/hint controls here.
@@ -3329,10 +3475,33 @@
     renderFabPopupContent(tab);
   }
 
+  // id differs by tab: songs/bible render "Switch Duration" under
+  // fab-fade-duration-switch (alongside a separate Enter Duration control —
+  // see onFadeEnterDurationChange() below); sources keeps the single,
+  // original fab-fade-duration id since it has no Enter/Switch split.
   function onFadeDurationChange(tab,val){
     val=parseInt(val);
     fadeSettings[tab].duration=val;
-    var el=document.getElementById('fab-fade-duration-val');if(el)el.textContent=val+'ms';
+    var id=(tab==='songs'||tab==='bible')?'fab-fade-duration-switch':'fab-fade-duration';
+    var el=document.getElementById(id+'-val');if(el)el.textContent=val+'ms';
+    saveFadeSettings();
+  }
+  // Songs/Bible only — see fadeSettings' own comment above for what Enter
+  // Duration governs (the whole-layer fade-in used only when Song/Bible/
+  // Split content starts from an inactive overlay).
+  function onFadeEnterDurationChange(tab,val){
+    val=parseInt(val);
+    fadeSettings[tab].enterDuration=val;
+    var el=document.getElementById('fab-fade-duration-enter-val');if(el)el.textContent=val+'ms';
+    saveFadeSettings();
+  }
+  // Songs/Bible only — see fadeSettings' own comment above for what Exit
+  // Duration governs (the whole-layer fade-out used only when the user
+  // directly presses Blank — never Transition's internal Blank, never CUT).
+  function onFadeExitDurationChange(tab,val){
+    val=parseInt(val);
+    fadeSettings[tab].exitDuration=val;
+    var el=document.getElementById('fab-fade-duration-exit-val');if(el)el.textContent=val+'ms';
     saveFadeSettings();
   }
   function onFadeTypeChange(tab,type){
