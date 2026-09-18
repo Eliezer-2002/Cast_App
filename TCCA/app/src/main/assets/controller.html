@@ -110,7 +110,7 @@
        whole card (not just the inner video area) shrinks together with the display,
        and any leftover room in the grid cell is genuine empty space around the
        whole card, never a wide card wrapping a narrower video. */
-    .monitor-card { grid-area:live; min-width:0; min-height:0; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; touch-action:none; }
+    .monitor-card { grid-area:live; min-width:0; min-height:0; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; touch-action:none;}
     .monitor-card.mon-closed { touch-action:auto; }
     .monitor-card-visual { display:flex; flex-direction:column; background:var(--bg2); border-radius:12px; overflow:hidden; border:2px solid var(--border); width:100%; max-width:100%; max-height:100%; }
     .monitor-card.monitor-live .monitor-card-visual { border-color:rgba(231,76,60,.55); }
@@ -141,7 +141,7 @@
        lifts the card above its sibling grid item (transform is applied inline by JS
        while the gesture is in progress); the drop target gets a highlighted outline
        while a drag is hovering over it. */
-    .monitor-card.mon-dragging { z-index:20; cursor:grabbing; opacity:.88; }
+    .monitor-card.mon-dragging { z-index:20; cursor:grabbing; opacity:.88;}
     .monitor-card.mon-dragging .monitor-card-visual { box-shadow:0 10px 28px rgba(0,0,0,.5); }
     .monitor-card.mon-drop-target .monitor-card-visual { outline:3px solid var(--accent); outline-offset:-3px; }
 
@@ -511,7 +511,17 @@
        range-row's <input type=range>) refusing to shrink to fit it — see the
        .range-row input[type=range] min-width:0 fix above, which is the actual fix;
        max-width:100% here is just a defensive floor for the box itself. */
-    #appear-fab-popup{position:fixed;z-index:148;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:14px 16px 18px;width:min(86vw,280px);max-width:100%;max-height:min(44vh,560px);overflow-y:auto;box-shadow:0 6px 28px rgba(0,0,0,.55);display:none;}
+    /* overflow lives on #appear-fab-popup-scroll (below), not here — a native
+       scrollbar painted by the SAME element that has border-radius doesn't
+       reliably get clipped to the rounded corners (the track can render as a
+       flat-edged rectangle cutting into the curve). Keeping this outer box
+       overflow:hidden with no scrollbar of its own, and giving the inner
+       wrapper the actual overflow-y:auto + matching max-height, makes the
+       inner (and its scrollbar) get clipped by THIS element's rounded
+       corners instead, since it exactly fills this box with no padding of
+       its own here to leave a gap. */
+    #appear-fab-popup{position:fixed;z-index:148;background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:min(86vw,280px);max-width:100%;overflow:hidden;box-shadow:0 6px 28px rgba(0,0,0,.55);display:none;}
+    #appear-fab-popup-scroll{max-height:min(44vh,560px);overflow-y:auto;padding:14px 16px 18px;}
     .fab-popup-title{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;}
     .fab-section{margin-bottom:14px;min-width:0;}
     .fab-section:last-child{margin-bottom:0;}
@@ -675,24 +685,75 @@
     .source-ctrl-section-label { font-size:10px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin-bottom:9px; }
     .source-ctrl-row { display:flex; align-items:center; gap:8px; margin-top:8px; }
     .source-ctrl-row:first-child { margin-top:0; }
-    .source-ctrl-btn-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-    .source-ctrl-btn-grid .btn { padding:12px 6px; }
-    /* PAN JOYSTICK — replaces the old arrow d-pad (spec 3). A single circular
-       drag surface with a centered knob; setupSourceJoystick() in the script
-       positions the knob via inline transform while dragging and springs it
-       back to dead-center on release (clear rest position = "not panning").
-       touch-action:none keeps the drag gesture from ever being interpreted as
-       a page/list scroll. */
-    .joystick-wrap { display:flex; justify-content:center; margin-top:12px; }
-    .joystick-base { position:relative; width:112px; height:112px; border-radius:50%; background:var(--bg3); border:1.5px solid var(--border); touch-action:none; flex-shrink:0; }
-    .joystick-base.dragging { border-color:var(--accent); }
-    .joystick-knob { position:absolute; left:50%; top:50%; width:46px; height:46px; border-radius:50%; background:var(--accent2); border:2px solid var(--accent3); transform:translate(-50%,-50%); box-shadow:0 3px 10px rgba(0,0,0,.35); pointer-events:none; }
-    .joystick-base.dragging .joystick-knob { background:var(--accent); }
-    .joystick-arrow { position:absolute; width:13px; height:13px; color:var(--text2); pointer-events:none; opacity:.6; }
-    .joystick-arrow-up { top:6px; left:50%; transform:translateX(-50%); }
-    .joystick-arrow-down { bottom:6px; left:50%; transform:translateX(-50%); }
-    .joystick-arrow-left { left:6px; top:50%; transform:translateY(-50%); }
-    .joystick-arrow-right { right:6px; top:50%; transform:translateY(-50%); }
+    /* ZOOM & PAN PREVIEW — shows the FULL, un-zoomed source with a highlighted
+       crop box drawn on top of it, instead of only the already-cropped live
+       output. The box IS the current zoom/pan state made visible: its size is
+       1/zoom of the frame (bigger box = zoomed out, smaller box = zoomed in)
+       and its position tracks panX/panY — see _zoomPanBoxRect()/
+       _updateZoomPanBox() in the script, which derive the box's left/top/
+       width/height from the EXACT SAME transform math presenter.html's
+       _applyMediaZoomTransform() applies to the real output, so the box always
+       matches what Preview/Live are actually showing.
+       aspect-ratio:16/9 here is NOT an arbitrary choice — it is the exact
+       fixed ratio every Preview/Live monitor on this page is deliberately
+       locked to regardless of the connected display (see _syncFrameScale()'s
+       own "the control page's own monitors must stay 16:9 regardless"
+       comment). Since _zoomPanBoxRect() sizes the box using the SAME
+       percentage in both axes, and percentages of a 16:9 box are themselves
+       16:9, the box's rendered aspect ratio always matches Preview/Live
+       automatically — and stays proportional through any responsive resize,
+       since aspect-ratio (like Preview/Live's own frame) resizes fluidly
+       with the container rather than using fixed pixel dimensions.
+       touch-action:none + the pointerdown/move/up wiring in
+       _bindZoomPanPreview() let a tap/drag ANYWHERE in here reposition the
+       box directly (see requirement: box centers on the touch point) — the
+       box itself is never a separate drag target, so this is the only
+       listener needed. */
+    .zoompan-preview { position:relative; width:100%; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; border:1px solid var(--border); margin-bottom:12px; touch-action:none; cursor:crosshair; -webkit-tap-highlight-color:transparent; }
+    /* .zoompan-frame-box is the thumbnail's own mirror of presenter.html's
+       #media-frame-box: sized/positioned within the (fixed 16:9)
+       .zoompan-preview by _zoomPanFrameBoxRect(), using the EXACT SAME
+       Frame-Ratio math as _applyMediaFrameBox() — so when Frame Ratio isn't
+       'auto', the backdrop image AND the crop box shrink together into the
+       correct centered sub-rectangle instead of the crop box staying sized
+       against the full 16:9 canvas the real zoom transform never actually
+       used. This is also why .zoompan-box's left/top/width/height (still
+       computed by _zoomPanBoxRect(), unchanged) resolve correctly as-is: an
+       absolutely-positioned box's percentages resolve against its nearest
+       positioned ancestor, which is this element, not .zoompan-preview. */
+    .zoompan-frame-box { position:absolute; overflow:hidden; }
+    .zoompan-preview img, .zoompan-preview video { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; pointer-events:none; background:#000; }
+    .zoompan-placeholder { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--text2); pointer-events:none; }
+    .zoompan-placeholder svg { width:36px; height:36px; opacity:.35; }
+    /* The 2000px spread box-shadow (clipped by .zoompan-preview's own
+       overflow:hidden) dims everything OUTSIDE the box instead of needing a
+       second overlay element — a plain "spotlight" trick. A short transition
+       makes range/D-pad-driven moves glide instead of snapping; an active
+       touch/pointer drag on the preview (see _bindZoomPanPreview()) disables
+       it via .dragging so the box tracks the finger with zero lag. */
+    .zoompan-box { position:absolute; border:2px solid var(--accent); border-radius:3px; box-shadow:0 0 0 2000px rgba(0,0,0,.55); pointer-events:none; transition:left .12s ease,top .12s ease,width .12s ease,height .12s ease; }
+    .zoompan-box.dragging { transition:none; }
+    /* ZOOM range — replaces the old Zoom −/Reset/Zoom + buttons with a single
+       continuous control (see _fabRangeRow()'s min/max/step below, which
+       preserve the exact 1..4 range the old buttons already used). */
+    .zoompan-zoom-row { margin-bottom:14px; }
+    /* PAN D-PAD — 4 discrete nudge buttons: tall L/R pillars flanking a
+       stacked U/D pair in the middle (grid-column/row spans below), each
+       press-and-holding via _bindZoomPanDirButton() (requestAnimationFrame
+       loop + throttled Android forward + single persist-on-release) to drive
+       sourcePanDelta()/sourcePanCommit() — the SAME pipeline the preview drag
+       (_bindZoomPanPreview()) also uses, never a second pan implementation.
+       Flat var(--bg3)/var(--border) style, same as every other secondary
+       control in this panel (e.g. .joystick-base used to, .collection-slide-btn
+       still does) — :active swaps to var(--accent2)/var(--accent3) like those. */
+    .zoompan-dpad { display:grid; grid-template-columns:52px 140px 52px; grid-template-rows:56px 56px; gap:8px; justify-content:center; margin:0 auto; }
+    .zoompan-dpad-up { grid-column:2; grid-row:1; }
+    .zoompan-dpad-down { grid-column:2; grid-row:2; }
+    .zoompan-dpad-left { grid-column:1; grid-row:1/3; }
+    .zoompan-dpad-right { grid-column:3; grid-row:1/3; }
+    .zoompan-dpad-btn { border-radius:10px; border:1.5px solid var(--border); background:var(--bg3); color:var(--text2); display:flex; align-items:center; justify-content:center; cursor:pointer; touch-action:none; -webkit-tap-highlight-color:transparent; padding:0; }
+    .zoompan-dpad-btn svg { width:20px; height:20px; pointer-events:none; }
+    .zoompan-dpad-btn:active { background:var(--accent2); border-color:var(--accent3); color:#fff; }
     /* Image Collection slide strip — horizontal scroll ONLY here (spec 5.v/12) */
     .collection-slide-strip { display:flex; gap:8px; overflow-x:auto; overflow-y:hidden; padding:4px 2px 8px; -webkit-overflow-scrolling:touch; }
     .collection-slide-btn { flex:0 0 auto; width:48px; height:48px; border-radius:9px; border:2px solid var(--border); background:var(--bg3); color:var(--text2); font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; position:relative; }
@@ -1158,9 +1219,11 @@
 </div>
 
 <div id="appear-fab-popup">
-  <div class="fab-popup-title" id="fab-popup-title">Appearance</div>
-  <!-- Content differs per tab — see renderFabPopupContent() -->
-  <div id="fab-popup-content"></div>
+  <div id="appear-fab-popup-scroll">
+    <div class="fab-popup-title" id="fab-popup-title">Appearance</div>
+    <!-- Content differs per tab — see renderFabPopupContent() -->
+    <div id="fab-popup-content"></div>
+  </div>
 </div>
 
 <!-- TOAST — small non-blocking notice; see toast()/toastWarn()/castingKeyboardWarn() -->
@@ -1400,6 +1463,23 @@
     castActive:false, castDeviceName:null,
     preview:null, // the content currently shown on the real Preview surface (about to go live)
     live:null,     // {kind:'song',songId,stanzaIdx} | {kind:'bible',vn,bookN,ch,ver} | {kind:'source',sourceId} — what's actually on air
+    // The id of whichever Source is currently loaded into Live's persistent
+    // base layer (presenter.html's #sources-layer — see its LAYER ARCHITECTURE
+    // comment), independent of ctrlState.live above. A Song/Bible slide is
+    // drawn as an OVERLAY on top of that base layer, not a replacement of it —
+    // so presenting one overwrites ctrlState.live with {kind:'song'|'bible',...}
+    // but must NOT forget which Source is still sitting underneath. Only ever
+    // (re)written when a Source itself goes live (goLive()'s 'source' branch),
+    // and cleared when that specific Source is removed (removeSource()).
+    liveSourceId:null,
+    // True only while Blank has faded the Song/Bible overlay back to fully
+    // transparent (set by activateBlank(), cleared the instant new content
+    // goes live via goLive()). Blank never touches the Sources base layer
+    // (see presenter.html's clearOverlay()) — so once the overlay is gone,
+    // whatever Source is at ctrlState.liveSourceId is visible again. Consulted
+    // by _overlayOpaque() below to tell whether that Source's own indicator
+    // should currently read Live (revealed) or Preview (hidden underneath).
+    blanked:false,
     // Whether the Bible Split Viewer currently has content pushed to the real
     // Live/Preview surfaces — Split never goes through live/preview above (it
     // is routed by pushSplitToPresenter() directly; see also tabAppearance.
@@ -1696,6 +1776,53 @@
     if(role==='live')sendSourceLive(s.endTargetId);
     else stageSourceToPreview(s.endTargetId);
   };
+  // ---- Live video readiness bridge (LIVE TRANSITION EFFECT — see
+  // _ctrlVideoBody()/syncPreviewToLiveVideo()) ----
+  // Setting a fresh src on presenter.html's <video> resets its readyState
+  // synchronously, and videoControl('seekTo',...) there clamps to [0,duration]
+  // — with duration still NaN/0 before metadata loads, ANY seekTo issued in
+  // that window silently clamps to 0 regardless of the time requested. That's
+  // the actual render-delay race: firing seekTo/play immediately after
+  // presenterCall(showGap,['video',...]) can silently lose the intended
+  // timeline position. presenter.html's own 'loadedmetadata' listener on that
+  // same persistent <video> element (fired again on every future src swap)
+  // calls back here — same-origin direct call, same bridge pattern as
+  // __onSourceVideoEnded above — the instant it's actually safe to seek.
+  var _videoReadyGen={live:0,preview:0};
+  var _videoReadyWaiters={live:[],preview:[]};
+  window.__onSourceVideoReady=function(role){
+    var waiters=_videoReadyWaiters[role];
+    if(!waiters||!waiters.length)return;
+    _videoReadyWaiters[role]=[];
+    waiters.forEach(function(fn){fn();});
+  };
+  // Bumped whenever Live's base layer takes on ANY new Source content (see
+  // goLive()'s 'source' branch) — invalidates every previously-pending
+  // _waitForVideoReady('live') call so a stale, still-loading video from a
+  // source the operator already switched away from (Video A → Video B,
+  // Video → Image → Video, etc.) can never win a race against whatever is
+  // actually selected now.
+  function _bumpVideoReadyGen(role){_videoReadyGen[role]=(_videoReadyGen[role]||0)+1;}
+  // Resolves once <role>'s own <video> element is actually ready to have
+  // currentTime/play state safely applied (readyState>=HAVE_METADATA — see
+  // presenter.html's isVideoReady()), resolving to false instead if a NEWER
+  // call for the same role supersedes this one first (_bumpVideoReadyGen) —
+  // callers must check the resolved value before touching currentTime/play
+  // state. The immediate isVideoReady() check covers the (rare) case where
+  // metadata is already loaded by the time this is called; otherwise it waits
+  // for presenter.html's own event. The timeout is a safety net only for a
+  // broken/unsupported video — never the primary mechanism.
+  function _waitForVideoReady(role,timeoutMs){
+    var gen=_videoReadyGen[role];
+    var iframeId=role==='live'?'presenter-iframe':'preview-iframe';
+    return new Promise(function(resolve){
+      var done=false;
+      function finish(){if(done)return;done=true;resolve(_videoReadyGen[role]===gen);}
+      if(_readFrameValue(iframeId,'isVideoReady',[])){finish();return;}
+      _videoReadyWaiters[role].push(finish);
+      setTimeout(finish,timeoutMs||1500);
+    });
+  }
   // Reached by presenter.html's PDF/PPTX renderer (Preview/Live mirror
   // iframes only — the real external cast display has no parent to call
   // back to) when a page/slide fails to render — see ERROR HANDLING: this is
@@ -1743,19 +1870,25 @@
   // Preview's last content onto Live) — the original behavior for those.
   function goLive(payload){
     var s=payload||ctrlState.preview;if(!s)return;
-    // LIVE TRANSITION EFFECT "Resume video" (spec 4) needs the elapsed time
-    // captured BEFORE presenterCall() below overwrites Live's <video> with a
-    // fresh src (which always restarts playback at 0) — read from wherever
-    // this source is already playing (Preview, if staged there), so Live can
-    // be seeked to match instead of restarting. Must happen up here, before
-    // the general presenterCall/Android call that follows.
-    var _videoResumeTime=null;
+    // Anything actually going live un-blanks the real output — see
+    // ctrlState.blanked's own comment above.
+    ctrlState.blanked=false;
+    // LIVE TRANSITION EFFECT modes 'autopreview'/'previewPaused' (see
+    // _ctrlVideoBody()/syncPreviewToLiveVideo()) need Preview's exact
+    // timeline position AND play/pause state captured BEFORE presenterCall()
+    // below overwrites Live's <video> with a fresh src — reading it any
+    // later risks extra drift if Preview is still playing while Live's video
+    // is loading (see syncPreviewToLiveVideo()'s own comment on why this
+    // snapshot, once captured, is never re-read). Must happen up here,
+    // before the general presenterCall/Android call that follows.
+    var _previewVideoSnapshot=null;
     if(s.kind==='source'){
-      var _srcForResume=findSource(s.sourceId);
-      if(_srcForResume&&_srcForResume.type==='video'&&_srcForResume.playAfter==='resume'&&
+      var _srcForSnapshot=findSource(s.sourceId);
+      if(_srcForSnapshot&&_srcForSnapshot.type==='video'&&
+         (_srcForSnapshot.playAfter==='autopreview'||_srcForSnapshot.playAfter==='previewPaused')&&
          ctrlState.preview&&ctrlState.preview.kind==='source'&&ctrlState.preview.sourceId===s.sourceId){
         var _pvSt=_readFrameValue('preview-iframe','getVideoStatus',[]);
-        if(_pvSt)_videoResumeTime=_pvSt.currentTime||0;
+        if(_pvSt)_previewVideoSnapshot={currentTime:_pvSt.currentTime||0,paused:!!_pvSt.paused};
       }
     }
     // Force the transition category from s.kind itself — the one thing we
@@ -1775,6 +1908,10 @@
       ctrlState.live={kind:'song',songId:s.songId,stanzaIdx:s.stanzaIdx};
       updateScreenIndicator('song',s.indicatorDetail);
       renderStanzaList();
+      // The Song overlay is now opaque on top of Live's base layer — refresh
+      // Sources so whatever Source is still loaded at ctrlState.liveSourceId
+      // (if any) shows Preview instead of a stale Live tag (see _overlayOpaque()).
+      renderSourcesList();
     } else if(s.kind==='bible'){
       ctrlState.live={kind:'bible',vn:s.vn,bookN:s.bookN,ch:s.ch,ver:s.ver};
       updateScreenIndicator('bible',s.indicatorDetail);
@@ -1784,8 +1921,16 @@
       // scroll position is never disturbed by presenting a verse.
       if(ctrlState.biblePanelTab==='recent')renderCtrlVerses();
       else refreshVerseLiveTags();
+      // Same reasoning as the Song branch above — the Bible overlay is now
+      // opaque, so refresh the underlying Source's tag too.
+      renderSourcesList();
     } else if(s.kind==='source'){
       ctrlState.live={kind:'source',sourceId:s.sourceId};
+      ctrlState.liveSourceId=s.sourceId;
+      // Any new Source taking over Live's base layer invalidates whatever
+      // previous video-readiness wait might still be pending (Video A → B,
+      // Video → Image → Video, etc.) — see _bumpVideoReadyGen()'s own comment.
+      _bumpVideoReadyGen('live');
       updateScreenIndicator('source',s.indicatorDetail);
       // Push this source's own saved presentation style (Display Mode/Frame
       // Ratio/Zoom-Pan/end-behavior/Clock style — see _sourceStyleCalls) to
@@ -1796,42 +1941,87 @@
       if(liveSrc){
         _pushSourceStyle(presenterCall,liveSrc);
         _sourceStyleCalls(liveSrc).forEach(function(c){_androidSourceCommand(c[0],c[1]);});
-        // LIVE TRANSITION EFFECT (spec 4) — Preview and Live are always two
-        // separate <video> elements (two separate iframe documents), so "one
-        // logical timeline" here means keeping them numerically aligned at
-        // every point they'd otherwise diverge, not literally one DOM element:
-        //   'start'  — both surfaces seek to 0 and play, from this moment.
-        //   'resume' — both surfaces seek to the position Preview was already
-        //              at (captured above, before Live's src was replaced)
-        //              and play, so Live picks up exactly where Preview left
-        //              off instead of restarting.
-        //   'manual' — neither surface is touched here at all; the operator
-        //              starts/stops playback explicitly via the transport
-        //              controls, which already fan out to both surfaces
-        //              together (see videoAction()/_sourceRuntimeCall()), so
-        //              they still never drift apart once the operator DOES
-        //              press Play.
-        // (Ongoing frame-by-frame drift between two independently-decoding
-        // <video> elements over long playback isn't correctable without a
-        // shared media source, which this architecture doesn't have — every
-        // explicit action stays aligned; this doesn't add a continuous
-        // background re-sync poll, which would be a much larger, riskier
-        // change than what was asked for here.)
-        if(liveSrc.type==='video'&&liveSrc.playAfter!=='manual'){
-          var seekTime=(liveSrc.playAfter==='resume'&&_videoResumeTime!=null)?_videoResumeTime:0;
-          presenterCall('videoControl',['seekTo',seekTime]);
-          _androidSourceCommand('videoControl',['seekTo',seekTime]);
-          presenterCall('videoControl',['play']);
-          _androidSourceCommand('videoControl',['play']);
-          if(ctrlState.preview&&ctrlState.preview.kind==='source'&&ctrlState.preview.sourceId===liveSrc.id){
-            previewCall('videoControl',['seekTo',seekTime]);
-            previewCall('videoControl',['play']);
-          }
-        }
+        if(liveSrc.type==='video')syncPreviewToLiveVideo(liveSrc.playAfter||'autostart',liveSrc,_previewVideoSnapshot);
         if(liveSrc.type==='imageCollection')_maybeStartCollectionAutoPlay(liveSrc);
       }
       renderSourcesList();
     }
+  }
+  // LIVE TRANSITION EFFECT (see _ctrlVideoBody()'s transitionOpts) — brings
+  // Live's video into the timeline/play-state its selected mode requires.
+  // previewSnapshot ({currentTime,paused}, or null) must already have been
+  // captured by the caller at the top of goLive() — at the moment Transition
+  // was actually clicked, before Live's fresh video src was even assigned —
+  // so a still-playing Preview can't drift the number applied to Live; this
+  // function only ever WRITES that value, it never re-reads Preview's live
+  // timeline itself (see goLive()'s own comment on why reading it any later
+  // would risk extra drift).
+  //
+  // Preview's own video for 'startPaused'/'previewPaused' (when it's still
+  // showing this exact source) is mutated synchronously and immediately —
+  // nothing is about to start playing, so there's no simultaneity to protect
+  // and it's already loaded, so there's nothing to wait for either. It's only
+  // touched when the mode actually requires a different state than whatever
+  // Preview is already in: reset-to-0 for 'startPaused', or a pause-in-place
+  // for 'previewPaused'.
+  //
+  // 'autostart'/'autopreview' are different: BOTH surfaces are about to start
+  // PLAYING, so starting Preview immediately while Live is still loading is
+  // exactly what visibly desyncs them (Preview would be a render-delay's
+  // worth of frames ahead by the time Live catches up). So for these two,
+  // Preview is deliberately left untouched until Live's own readiness wait
+  // resolves, then BOTH surfaces' timeline and playback start are driven
+  // together through the existing transport function videoAction() — never
+  // videoAction(id,'toggle'), which would just as happily land on 'pause' as
+  // 'play' depending on whichever surface's current state it happens to poll
+  // (see its own toggle branch above) — an explicit 'seekTo' then 'play'/
+  // 'pause' call guarantees the actual end state regardless of what either
+  // surface was doing right before. videoAction()'s own _sourceRuntimeCall()
+  // already fans a single call out to Preview AND Live (and the native
+  // bridge, for Live) whenever the source occupies both — see its own
+  // comment — so this needs exactly one call per step instead of two.
+  //
+  // Live's video is the side actually racing the render delay (a fresh src
+  // was just assigned to it by the presenterCall/Android calls that ran
+  // immediately before this), so it's the side that waits for real readiness
+  // (_waitForVideoReady('live') — event-driven off presenter.html's own
+  // 'loadedmetadata', not a fixed setTimeout) before currentTime/play state
+  // are touched. That wait's generation guard also discards a stale,
+  // still-loading video from a source the operator already transitioned away
+  // from before it finished loading (Video A → B, Video → Image → Video, …).
+  function syncPreviewToLiveVideo(mode,liveSrc,previewSnapshot){
+    var seekTime,shouldPlay;
+    if(mode==='autopreview'){
+      seekTime=previewSnapshot?previewSnapshot.currentTime:0;
+      shouldPlay=previewSnapshot?!previewSnapshot.paused:true;
+    } else if(mode==='previewPaused'){
+      seekTime=previewSnapshot?previewSnapshot.currentTime:0;
+      shouldPlay=false;
+    } else if(mode==='startPaused'){
+      seekTime=0;shouldPlay=false;
+    } else { // 'autostart' — also the sanitized default for any unknown value
+      seekTime=0;shouldPlay=true;
+    }
+    if(mode==='startPaused'||mode==='previewPaused'){
+      if(ctrlState.preview&&ctrlState.preview.kind==='source'&&ctrlState.preview.sourceId===liveSrc.id){
+        if(mode==='startPaused'){previewCall('videoControl',['seekTo',0]);previewCall('videoControl',['pause']);}
+        else{previewCall('videoControl',['pause']);}
+      }
+      _androidSourceCommand('videoControl',['seekTo',seekTime]);
+      _androidSourceCommand('videoControl',['pause']);
+      _waitForVideoReady('live').then(function(stillCurrent){
+        if(!stillCurrent)return;
+        presenterCall('videoControl',['seekTo',seekTime]);
+        presenterCall('videoControl',['pause']);
+      });
+      return;
+    }
+    // 'autostart' / 'autopreview'
+    _waitForVideoReady('live').then(function(stillCurrent){
+      if(!stillCurrent)return;
+      videoAction(liveSrc.id,'seekTo',seekTime);
+      videoAction(liveSrc.id,shouldPlay?'play':'pause');
+    });
   }
   function presentNow(payload){goLive(payload);}
 
@@ -2046,15 +2236,27 @@
     if(swapBtn)swapBtn.style.display=oneClosed?'':'none';
     syncPreviewScale();
   }
+  // Assigned by the VERTICAL RESIZE HANDLE section further down (once
+  // applyHeight() exists there) — closeMonitor() below needs to trigger that
+  // same "collapse the whole stage" behavior without duplicating its
+  // animation/aria-valuenow logic. Declared up here (rather than reaching
+  // into that IIFE) since closeMonitor() runs first in file order but only
+  // ever gets CALLED later, well after the whole script — including that
+  // assignment — has finished running once on load.
+  var _collapseMonitorStage=null;
   function closeMonitor(kind){
     var other=kind==='preview'?'live':'preview';
     if(monitorClosedState[other]){
       // The other window is already closed — closing this one too would leave
-      // nothing visible. toggleSwapLivePreview() already has a dedicated "one
-      // closed" path (see above) that flips which of Preview/Live is the visible
-      // one, which is exactly Swap's behavior in this state — reuse it instead of
-      // a second implementation.
-      toggleSwapLivePreview();
+      // nothing visible. This used to reuse toggleSwapLivePreview()'s "one
+      // closed" path, but that silently flips which of Preview/Live is the
+      // visible one — a surprising thing for a Close button to do (Swap
+      // already has its own dedicated button for exactly this situation —
+      // see updateMonitorGridState()'s oneClosed/#btn-swap handling, left
+      // untouched). Instead, collapse the whole monitor stage out of the way,
+      // the same smooth, aria-valuenow-driven way the resize handle's own
+      // Home key already does (see applyHeight() below).
+      if(_collapseMonitorStage)_collapseMonitorStage(true);
       return;
     }
     monitorClosedState[kind]=true;
@@ -2083,6 +2285,42 @@
   // resizing, and vice versa. The popup itself never touches ctrlState/
   // _lastPresenterCall/_lastPreviewCall — it only reads them.
   // ============================================================
+  // FLIP-style smooth transition for the drag-to-swap gesture below — CSS
+  // grid-area reassignment (toggleSwapLivePreview()) is instantaneous by
+  // nature (grid-template-areas isn't itself animatable), so this fakes the
+  // animation instead of replacing the grid system: measure both cards'
+  // actual on-screen rects right now (cardA still carrying its live drag
+  // offset, cardB sitting in its normal spot), perform the real swap, then
+  // immediately re-apply an inverse transform on both so nothing visibly
+  // jumps the instant grid-area flips, and finally (next frame) transition
+  // that inverse transform back to none — so the drag's own motion flows
+  // straight into the swap instead of a hard cut. Only ever reached from a
+  // completed drag (see onUp() below) — the plain Swap button/toggleSwapLivePreview()
+  // itself is untouched and still swaps instantly, exactly as before.
+  var SWAP_ANIM_MS=220;
+  function _animateCardSwap(cardA,cardB){
+    var rA=cardA.getBoundingClientRect();
+    var rB=cardB.getBoundingClientRect();
+    cardA.style.transition='';
+    cardA.style.transform='';
+    toggleSwapLivePreview();
+    [[cardA,rA],[cardB,rB]].forEach(function(pair){
+      var card=pair[0],before=pair[1];
+      var after=card.getBoundingClientRect();
+      var dx=before.left-after.left,dy=before.top-after.top;
+      card.style.transition='none';
+      card.style.transform=(dx||dy)?('translate('+dx+'px,'+dy+'px)'):'';
+    });
+    requestAnimationFrame(function(){
+      [cardA,cardB].forEach(function(card){
+        card.style.transition='transform '+SWAP_ANIM_MS+'ms ease';
+        card.style.transform='';
+      });
+      setTimeout(function(){
+        [cardA,cardB].forEach(function(card){card.style.transition='';});
+      },SWAP_ANIM_MS);
+    });
+  }
   var DOUBLE_TAP_MS=320, DOUBLE_TAP_MOVE_TOLERANCE=12, DRAG_THRESHOLD=16;
   function setupCardInteractions(el,kind){
     if(!el)return;
@@ -2107,10 +2345,15 @@
         e.preventDefault();
       }
     }
-    function cleanupDrag(){
+    // keepTransform: true when a swap animation is about to take over el's
+    // transform itself (_animateCardSwap below) — the normal cleanup path
+    // resets it to '' immediately, which would just be overwritten a moment
+    // later, but skipping it there avoids a one-frame flash back to the
+    // untransformed position before the swap animation takes over.
+    function cleanupDrag(keepTransform){
       el.removeEventListener('pointermove',onMove);
       el.classList.remove('mon-dragging');
-      el.style.transform='';
+      if(!keepTransform)el.style.transform='';
       var other=otherCardEl();
       if(other)other.classList.remove('mon-drop-target');
       if(pointerId!=null){try{el.releasePointerCapture(pointerId);}catch(err){}}
@@ -2124,9 +2367,9 @@
           var r=other.getBoundingClientRect();
           doSwap=e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom;
         }
-        cleanupDrag();
+        cleanupDrag(doSwap);
         dragging=false;
-        if(doSwap)toggleSwapLivePreview();
+        if(doSwap&&other)_animateCardSwap(el,other);
         return;
       }
       cleanupDrag();
@@ -2391,16 +2634,15 @@
       if(s.builtin&&builtinSettings[s.type]){
         for(var k in builtinSettings[s.type])if(builtinSettings[s.type].hasOwnProperty(k))s[k]=builtinSettings[s.type][k];
       }
-      if((s.type==='image'||s.type==='video'||s.type==='imageCollection'||s.type==='pdf'||s.type==='ppt')&&!s.settings)s.settings=_defaultMediaSettings();
-      // Legacy migration: this feature's very first "Play video after" control
-      // (Transition/Present Current Preview Window) only ever shipped within
-      // this same development cycle — no released install to preserve compat
-      // for — so any value that isn't one of the current three LIVE TRANSITION
-      // EFFECT options just falls back to 'start' (== the app's original
-      // always-plays-immediately-from-0 behavior).
+      if((s.type==='image'||s.type==='video'||s.type==='imageCollection'||s.type==='pdf'||s.type==='ppt'||s.type==='camera')&&!s.settings)s.settings=_defaultMediaSettings();
+      // Legacy migration: any value that isn't one of the current four LIVE
+      // TRANSITION EFFECT options (including the older 'start'/'resume'/
+      // 'manual' set from this feature's first cut) falls back to
+      // 'autostart' (== the app's original always-plays-immediately-from-0
+      // behavior).
       if(s.type==='video'){
         if(!s.endBehavior)s.endBehavior='loop';
-        if(['start','resume','manual'].indexOf(s.playAfter)<0)s.playAfter='start';
+        if(['autostart','autopreview','startPaused','previewPaused'].indexOf(s.playAfter)<0)s.playAfter='autostart';
       }
       if(s.type==='imageCollection'){if(!s.images)s.images=[];if(s.currentIndex==null)s.currentIndex=0;}
       // Page/slide counts are real now (pdfjs-dist/@aiden0z/pptx-renderer —
@@ -2417,8 +2659,26 @@
     renderSourcesList();
   }
   function findSource(id){return sourcesState.items.find(function(s){return s.id===id;});}
+  // NOTE: these two answer "is this Source's own content the thing loaded
+  // into the Live/Preview iframe" — used for frame-routing (_liveOrPreviewFrameId,
+  // runtime style/volume/zoom calls, video status polling) — which stays true
+  // regardless of a Song/Bible overlay being drawn on top of it in presenter.html
+  // (same iframe, same underlying source content, just visually covered). Do
+  // NOT fold overlay-opacity into these — see _isSourceVisiblyLive/Preview
+  // below for the Sources-panel DISPLAY-only distinction.
   function _isSourceLive(id){return !!(ctrlState.live&&ctrlState.live.kind==='source'&&ctrlState.live.sourceId===id);}
   function _isSourcePreview(id){return !!(ctrlState.preview&&ctrlState.preview.kind==='source'&&ctrlState.preview.sourceId===id);}
+  // True while a Song/Bible slide is the opaque foreground of Live — i.e. it's
+  // actually covering whatever Source sits on the base layer underneath (see
+  // ctrlState.liveSourceId's comment). False once Blank fades that overlay
+  // back to transparent (ctrlState.blanked), which reveals the base Source again.
+  function _overlayOpaque(){return !!(ctrlState.live&&(ctrlState.live.kind==='song'||ctrlState.live.kind==='bible')&&!ctrlState.blanked);}
+  // Sources-panel .source-tag display only — distinct from _isSourceLive()/
+  // _isSourcePreview() above. A Source can still be the base-layer occupant
+  // (ctrlState.liveSourceId) while a Song/Bible overlay hides it: it should
+  // then read Preview, not Live, and flip back to Live once Blank reveals it.
+  function _isSourceVisiblyLive(id){return ctrlState.liveSourceId===id&&!_overlayOpaque();}
+  function _isSourceVisiblyPreview(id){return (ctrlState.liveSourceId===id&&_overlayOpaque())||_isSourcePreview(id);}
 
   function sourceTypeLabel(type){
     return {idle_clock:'Clock',idle_blank:'Blank',image:'Image',imageCollection:'Image Collection',video:'Video',pdf:'PDF',ppt:'PowerPoint',camera:'Camera / Capture'}[type]||type;
@@ -2463,7 +2723,7 @@
   // removing a source moved to the "Edit Added Sources" management modal (see
   // openManageSourcesModal), which requires an explicit confirmation to remove.
   function renderSourceCard(s){
-    var live=_isSourceLive(s.id),preview=!live&&_isSourcePreview(s.id);
+    var live=_isSourceVisiblyLive(s.id),preview=!live&&_isSourceVisiblyPreview(s.id);
     var unusable=(s.type==='camera'&&!s.stream)||((s.type==='image'||s.type==='video'||s.type==='pdf'||s.type==='ppt')&&!s.dataUrl)||(s.type==='imageCollection'&&(!s.images||!s.images.length));
     // data-source-id is read by setupSourceCardGestures()'s swipe handling
     // (right-to-left swipe opens this card's Source Controls side panel) —
@@ -2522,6 +2782,13 @@
       calls.push(['setSourceFrame',[st.displayMode,st.frameRatio]]);
       calls.push(['setSourceZoom',[st.zoom,st.panX,st.panY]]);
     }
+    // Camera/Capture has no Display Mode/Frame Ratio (its #camera-video element
+    // isn't inside #media-frame-box — see presenter.html), just Zoom/Pan, which
+    // uses the exact same settings{zoom,panX,panY}/setSourceZoom() pipeline.
+    if(s.type==='camera'){
+      var cst=s.settings||_defaultMediaSettings();
+      calls.push(['setSourceZoom',[cst.zoom,cst.panX,cst.panY]]);
+    }
     if(s.type==='video')calls.push(['setVideoEndBehavior',[s.endBehavior||'loop']]);
     if(s.type==='idle_clock')calls.push(['setClockStyle',[s.fontColor||null,s.fontSize||null]]);
     return calls;
@@ -2533,16 +2800,14 @@
   function _pushSourceStyle(fn,s){_sourceStyleCalls(s).forEach(function(c){fn(c[0],c[1]);});}
   // Video autoplay is handled explicitly (see presenter.html's <video>, which
   // deliberately has no autoplay attribute any more) rather than always-on.
-  // Staging to Preview always autoplays immediately for review UNLESS the
-  // LIVE TRANSITION EFFECT is 'manual' (spec 4 — "do not automatically start/
-  // restart... allow the user to control playback manually", starting from
-  // the moment it's staged, not just at the live transition). 'start'/
-  // 'resume' both autoplay in Preview — what differs between them is only
-  // what happens to Live's own timeline at the actual transition moment, see
-  // goLive()'s source branch.
+  // Staging to Preview always autoplays immediately for review, regardless of
+  // the LIVE TRANSITION EFFECT mode — that dropdown only governs what happens
+  // to Preview/Live's timeline and play state at the actual Transition moment
+  // (see goLive()'s source branch / syncPreviewToLiveVideo()), never how a
+  // freshly-staged Preview behaves on its own.
   function _applyVideoPlayAfterStage(fn,s){
     if(!s||s.type!=='video')return;
-    fn('videoControl',[(s.playAfter==='manual')?'pause':'play']);
+    fn('videoControl',['play']);
   }
 
   // Re-pushes just WHICH content a source shows (e.g. an Image Collection's
@@ -2697,8 +2962,19 @@
       presenterCall('clearOverlay',[liveMs]);
       if(window.Android&&typeof window.Android.clearOverlay==='function')window.Android.clearOverlay(liveMs);
       if(ctrlState.live.kind==='song')touchedSong=true;else touchedBible=true;
-      ctrlState.live=null;
-      updateScreenIndicator('blank');
+      ctrlState.blanked=true;
+      // The overlay fading to transparent reveals whatever Source is still
+      // loaded on Live's base layer underneath (presenter.html never touches
+      // #sources-layer for Blank — see clearOverlay()'s own comment), so
+      // screen-indicator-label must now name THAT Source instead of the
+      // Song/Bible slide it was just showing — it always reflects the actual
+      // visible PGM content, not the most-recently-selected one. Falls back
+      // to 'none' (Idle) if no Source has ever gone live underneath.
+      var baseSrc=ctrlState.liveSourceId?findSource(ctrlState.liveSourceId):null;
+      updateScreenIndicator(baseSrc?'source':'none',baseSrc?baseSrc.name:null);
+      // ...and that Source's own .source-tag needs to flip from Preview back
+      // to Live now that it's visible again — see _overlayOpaque().
+      renderSourcesList();
     }
     if(previewSB){
       var prevCat=ctrlState.preview.kind==='song'?'songs':'bible';
@@ -2741,6 +3017,10 @@
     if(s.type==='camera'&&s.stream){try{s.stream.getTracks().forEach(function(t){t.stop();});}catch(e){}}
     if(ctrlState.preview&&ctrlState.preview.kind==='source'&&ctrlState.preview.sourceId===id)clearPreview();
     if(ctrlState.live&&ctrlState.live.kind==='source'&&ctrlState.live.sourceId===id){ctrlState.live=null;updateScreenIndicator('none');}
+    // Also forget it as the base-layer occupant even if a Song/Bible overlay
+    // currently hides it (ctrlState.live.kind wouldn't be 'source' in that
+    // case, so the check above alone would miss it) — see ctrlState.liveSourceId.
+    if(ctrlState.liveSourceId===id)ctrlState.liveSourceId=null;
     if(s.type==='imageCollection')_stopCollectionAutoPlay(id);
     // Release the parsed doc/deck + any cached thumbnails so removing a
     // large PDF/PPTX source actually frees its memory (spec's PERFORMANCE
@@ -2963,7 +3243,7 @@
     if(_newSourceType==='camera'){
       if(!_pendingCameraStream)return;
       var camCount=sourcesState.items.filter(function(s){return s.type==='camera';}).length;
-      sourcesState.items.push({id:'src-'+(_sourceIdSeq++),type:'camera',name:customName||('Camera '+(camCount+1)),stream:_pendingCameraStream,deviceId:_pendingCameraDeviceId});
+      sourcesState.items.push({id:'src-'+(_sourceIdSeq++),type:'camera',name:customName||('Camera '+(camCount+1)),stream:_pendingCameraStream,deviceId:_pendingCameraDeviceId,settings:_defaultMediaSettings()});
       _pendingCameraStream=null;
       saveSourcesState();
       renderSourcesList();closeAddSourceModal();
@@ -2981,7 +3261,7 @@
     }
     var newSrc={id:'src-'+(_sourceIdSeq++),type:_newSourceType,name:customName||_pendingFileData.name,dataUrl:_pendingFileData.dataUrl,fileMeta:{name:_pendingFileData.name,size:_pendingFileData.size}};
     if(_newSourceType==='image'||_newSourceType==='video'||_newSourceType==='pdf'||_newSourceType==='ppt')newSrc.settings=_defaultMediaSettings();
-    if(_newSourceType==='video'){newSrc.endBehavior='loop';newSrc.endTargetId=null;newSrc.playAfter='start';}
+    if(_newSourceType==='video'){newSrc.endBehavior='loop';newSrc.endTargetId=null;newSrc.playAfter='autostart';}
     if(_newSourceType==='pdf'){newSrc.currentPage=1;}
     if(_newSourceType==='ppt'){newSrc.currentSlide=0;}
     sourcesState.items.push(newSrc);
@@ -3091,6 +3371,7 @@
     else if(s.type==='imageCollection')html=_ctrlCollectionBody(s);
     else if(s.type==='pdf')html=_ctrlPdfBody(s);
     else if(s.type==='ppt')html=_ctrlPptBody(s);
+    else if(s.type==='camera')html=_ctrlCameraBody(s);
     else if(s.type==='idle_clock')html=_ctrlClockBody(s);
     else html='<div class="source-ctrl-section"><div class="add-source-note">No additional controls are available for this source type yet.</div></div>';
     body.innerHTML=html;
@@ -3100,16 +3381,24 @@
     if(s.type==='video')_startVideoStatusPoll(s.id);else _stopVideoStatusPoll();
     // Page/slide thumbnail strips are lazily populated (IntersectionObserver)
     // after their HTML lands in the DOM — same rebind-every-render reasoning
-    // as the joystick below, since innerHTML= just destroyed any prior wiring.
+    // as the Zoom & Pan controls below, since innerHTML= just destroyed any
+    // prior wiring.
     if(s.type==='pdf')_wirePdfThumbs(s);
     else if(s.type==='ppt')_wirePptxThumbs(s);
-    // Joystick is a plain DOM control, not innerHTML-driven state — (re)bind
-    // its pointer handlers fresh every render, same as any other event target
-    // recreated by an innerHTML rebuild (see setupSourceCardGestures()'s own
-    // delegated-listener reasoning for why this pattern is already normal
-    // here rather than needing a teardown step).
-    var joyWrap=document.getElementById('joystick-'+s.id);
-    if(joyWrap)setupSourceJoystick(s.id,joyWrap);
+    // Zoom & Pan (preview drag, D-pad, zoom range) are plain DOM controls,
+    // not innerHTML-driven state — (re)bind their pointer/change handlers
+    // fresh every render, same as any other event target recreated by an
+    // innerHTML rebuild (see setupSourceCardGestures()'s own delegated-
+    // listener reasoning for why this pattern is already normal here rather
+    // than needing a teardown step).
+    _bindZoomPanControls(s);
+    // Camera's Zoom & Pan preview thumbnail is its OWN live <video> (a
+    // MediaStream can be bound to more than one <video> element at once) —
+    // (re)bind it fresh every render, same reasoning as above.
+    if(s.type==='camera'){
+      var zpThumb=document.getElementById('zoompan-thumb-'+s.id);
+      if(zpThumb&&s.stream){try{zpThumb.srcObject=s.stream;zpThumb.play().catch(function(){});}catch(e){}}
+    }
   }
 
   // ---- small reusable UI builders, shared across the per-type bodies below ----
@@ -3141,31 +3430,128 @@
   // Shared by Image / Video / Image Collection / PDF (spec 3.i-iii, 4.ii-iii,
   // 5.ii-iv, 8.e-f): Display Mode + Frame Ratio + Zoom/Pan all act on the same
   // settings{displayMode,frameRatio,zoom,panX,panY} shape and the same
-  // presenter.html setSourceFrame()/setSourceZoom() runtime calls. Pan is a
-  // joystick (spec 3) rather than arrow buttons — see setupSourceJoystick()/
-  // joystickPanDelta() below, which drive the exact same _clampMediaPan()/
-  // setSourceZoom() pipeline the old arrows used, just fed continuously.
+  // presenter.html setSourceFrame()/setSourceZoom() runtime calls. Pan is
+  // driven by touching the crop-box preview directly or the D-pad buttons —
+  // see _bindZoomPanPreview()/_bindZoomPanDirButton()/sourcePanDelta() below,
+  // which all drive the exact same _clampMediaPan()/setSourceZoom() pipeline.
+  // Zoom & Pan controls (zoom range + crop-box preview + pan D-pad) — the
+  // part of _ctrlFrameZoomSection shared with camera sources below, which
+  // have no Display Mode/Frame Ratio of their own (see _ctrlCameraBody())
+  // but drive the exact same settings{zoom,panX,panY}/setSourceZoom()
+  // pipeline.
+  // Crop-box geometry for the Zoom & Pan preview — derived from the EXACT
+  // same transform presenter.html's _applyMediaZoomTransform() applies to the
+  // real output (translate(panX%,panY%) THEN scale(zoom), transform-origin
+  // center), solved for which fraction of the un-zoomed frame ends up
+  // visible. Box width/height = 100/zoom (bigger box = more zoomed out);
+  // box center = 50 - pan/zoom (percent). Keeping this math in one place
+  // means the box can never silently drift out of sync with what Preview/
+  // Live are actually showing.
+  // The existing zoom range (previously hardcoded as 1/4 in sourceZoomStep's
+  // Math.max/min and mirrored in presenter.html's _applyMediaZoomTransform) —
+  // named here once so the range input below can reuse the SAME limits
+  // instead of a second, potentially-drifting pair of magic numbers.
+  var ZOOM_MIN=1, ZOOM_MAX=4;
+  function _zoomPanBoxRect(st){
+    var z=Math.max(ZOOM_MIN,Math.min(ZOOM_MAX,(st&&st.zoom)||1));
+    var w=100/z, h=100/z;
+    var cx=50-((st&&st.panX||0)/z), cy=50-((st&&st.panY||0)/z);
+    return {left:(cx-w/2)+'%',top:(cy-h/2)+'%',width:w+'%',height:h+'%'};
+  }
+  function _updateZoomPanBox(id){
+    var s=findSource(id);if(!s||!s.settings)return;
+    var box=document.getElementById('zoompan-box-'+id);
+    if(!box)return;
+    var r=_zoomPanBoxRect(s.settings);
+    box.style.left=r.left;box.style.top=r.top;box.style.width=r.width;box.style.height=r.height;
+  }
+  // .zoompan-frame-box's own position/size within the (always-16:9)
+  // .zoompan-preview — the thumbnail's mirror of presenter.html's
+  // _applyMediaFrameBox(), which sizes the REAL #media-frame-box to the
+  // configured Frame Ratio inside the SAME fixed-16:9 presenter frame (see
+  // _syncFrameScale()'s "control page's own monitors must stay 16:9
+  // regardless"). Without this, a non-'auto' Frame Ratio would leave the
+  // crop box sized/positioned against the full 16:9 canvas while the real
+  // zoom transform only ever acted on the smaller, centered Frame-Ratio box
+  // — exactly the "box covers a different part of the image than what
+  // Preview/Live actually show" mismatch this mirrors _applyMediaFrameBox()
+  // to prevent. Camera has no Frame Ratio control (always passes null/
+  // 'auto' in here), so it always gets the full 100%x100% box.
+  var _ZP_FRAME_RATIOS={'1:1':1,'4:3':4/3,'16:9':16/9,'16:10':16/10,'21:9':21/9};
+  function _zoomPanFrameBoxRect(frameRatio){
+    var ratio=_ZP_FRAME_RATIOS[frameRatio];
+    if(!ratio)return {left:'0%',top:'0%',width:'100%',height:'100%'};
+    var containerRatio=16/9; // .zoompan-preview's own fixed aspect-ratio
+    if(containerRatio>ratio){
+      var wPct=(ratio/containerRatio)*100;
+      return {left:(50-wPct/2)+'%',top:'0%',width:wPct+'%',height:'100%'};
+    }
+    var hPct=(containerRatio/ratio)*100;
+    return {left:'0%',top:(50-hPct/2)+'%',width:'100%',height:hPct+'%'};
+  }
+  // The real output's object-fit mode (see presenter.html's #media-frame-box.
+  // fit-contain/.fit-cover/.fit-fill, driven by the exact same displayMode
+  // value) — mirrored here so the thumbnail's backdrop maps container-percent
+  // positions onto the SAME actual image pixels the real output does.
+  // Camera's own #camera-video is hardcoded object-fit:contain in
+  // presenter.html (it has no Display Mode control), so it ignores
+  // displayMode and always mirrors that.
+  function _zoomPanObjectFit(displayMode){
+    return displayMode==='fullscreen'?'fill':(displayMode==='cover'?'cover':'contain');
+  }
+  // The full, un-cropped backdrop the crop box is drawn on top of — one per
+  // source type, using whatever still-frame is already available client-side
+  // (no extra decode work). PDF/PPTX have no cheap raster to hand here (their
+  // real render lives inside the sandboxed presenter iframe), so they fall
+  // back to a generic page icon; the crop box above it stays fully
+  // functional, just without a live backdrop to preview against. Camera gets
+  // its OWN live <video> (a MediaStream can be attached to more than one
+  // <video> element at once) — bound to s.stream by renderSourceControlBody()
+  // right after this HTML lands, same rebind-every-render pattern as the
+  // preview drag/D-pad handlers (see _bindZoomPanControls()).
+  function _zoomPanThumbHTML(s){
+    var fitStyle=' style="object-fit:'+(s.type==='camera'?'contain':_zoomPanObjectFit(s.settings&&s.settings.displayMode))+';"';
+    if(s.type==='image'&&s.dataUrl)return '<img'+fitStyle+' src="'+s.dataUrl+'" alt="">';
+    if(s.type==='imageCollection'&&s.images&&s.images.length)return '<img'+fitStyle+' src="'+s.images[Math.min(s.currentIndex||0,s.images.length-1)].dataUrl+'" alt="">';
+    if(s.type==='video'&&s.dataUrl)return '<video'+fitStyle+' muted playsinline src="'+s.dataUrl+'"></video>';
+    if(s.type==='camera')return '<video'+fitStyle+' id="zoompan-thumb-'+s.id+'" muted playsinline autoplay></video>';
+    return '<div class="zoompan-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>';
+  }
+  function _ctrlZoomPanBlock(s){
+    var st=s.settings||_defaultMediaSettings();
+    var fb=_zoomPanFrameBoxRect(s.type==='camera'?null:st.frameRatio);
+    var r=_zoomPanBoxRect(st);
+    var zoomVal=Math.max(ZOOM_MIN,Math.min(ZOOM_MAX,st.zoom||1));
+    return '<div class="source-ctrl-section">'
+      +'<div class="source-ctrl-section-label">Zoom &amp; Pan</div>'
+      +'<div class="zoompan-preview" id="zoompan-preview-'+s.id+'">'
+      +'<div class="zoompan-frame-box" id="zoompan-framebox-'+s.id+'" style="left:'+fb.left+';top:'+fb.top+';width:'+fb.width+';height:'+fb.height+';">'
+      +_zoomPanThumbHTML(s)
+      +'<div class="zoompan-box" id="zoompan-box-'+s.id+'" style="left:'+r.left+';top:'+r.top+';width:'+r.width+';height:'+r.height+';"></div>'
+      +'</div>' // closes .zoompan-frame-box
+      +'</div>' // closes .zoompan-preview
+      +'<div class="zoompan-zoom-row">'+_fabRangeRow('Zoom','zoompan-range-'+s.id,ZOOM_MIN,ZOOM_MAX,zoomVal.toFixed(2),'x',"sourceZoomInput('"+s.id+"',this.value)",0.05)+'</div>'
+      +'<div class="zoompan-dpad">'
+      +'<button type="button" class="zoompan-dpad-btn zoompan-dpad-up" id="zoompan-dpad-up-'+s.id+'" aria-label="Pan up"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="12 5 19 15 5 15"/></svg></button>'
+      +'<button type="button" class="zoompan-dpad-btn zoompan-dpad-down" id="zoompan-dpad-down-'+s.id+'" aria-label="Pan down"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="12 19 5 9 19 9"/></svg></button>'
+      +'<button type="button" class="zoompan-dpad-left zoompan-dpad-btn" id="zoompan-dpad-left-'+s.id+'" aria-label="Pan left"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 12 15 5 15 19"/></svg></button>'
+      +'<button type="button" class="zoompan-dpad-right zoompan-dpad-btn" id="zoompan-dpad-right-'+s.id+'" aria-label="Pan right"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="19 12 9 19 9 5"/></svg></button>'
+      +'</div>'
+      +'</div>';
+  }
   function _ctrlFrameZoomSection(s){
     var st=s.settings||_defaultMediaSettings();
     return '<div class="source-ctrl-section">'+_ctrlDropdownRow('Display Mode',DISPLAY_MODE_OPTIONS,st.displayMode,function(v){return "onSourceDisplayModeChange('"+s.id+"','"+v+"')";})+'</div>'
       +'<div class="source-ctrl-section">'+_ctrlDropdownRow('Frame Ratio',FRAME_RATIO_OPTIONS,st.frameRatio,function(v){return "onSourceFrameRatioChange('"+s.id+"','"+v+"')";})+'</div>'
-      +'<div class="source-ctrl-section">'
-      +'<div class="source-ctrl-section-label">Zoom &amp; Pan</div>'
-      +'<div class="source-ctrl-btn-grid">'
-      +'<button class="btn btn-secondary btn-sm" onclick="sourceZoomStep(\''+s.id+'\',-0.25)">Zoom −</button>'
-      +'<button class="btn btn-secondary btn-sm" onclick="sourceZoomReset(\''+s.id+'\')">Reset</button>'
-      +'<button class="btn btn-secondary btn-sm" onclick="sourceZoomStep(\''+s.id+'\',0.25)">Zoom +</button>'
-      +'</div>'
-      +'<div class="joystick-wrap" id="joystick-'+s.id+'">'
-      +'<div class="joystick-base">'
-      +'<svg class="joystick-arrow joystick-arrow-up" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 5 17 12 7 12"/></svg>'
-      +'<svg class="joystick-arrow-right joystick-arrow" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 12 12 17 12 7"/></svg>'
-      +'<svg class="joystick-arrow joystick-arrow-down" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 19 7 12 17 12"/></svg>'
-      +'<svg class="joystick-arrow-left joystick-arrow" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 12 12 7 12 17"/></svg>'
-      +'<div class="joystick-knob"></div>'
-      +'</div>'
-      +'</div>'
-      +'</div>';
+      +_ctrlZoomPanBlock(s);
+  }
+  // Camera/Capture Source Controls body — Zoom & Pan only (spec: no Display
+  // Mode/Frame Ratio, since #camera-video isn't inside #media-frame-box — see
+  // presenter.html). A disconnected camera (no live stream) still gets the
+  // controls so its saved zoom/pan is ready the moment it reconnects.
+  function _ctrlCameraBody(s){
+    if(!s.settings)s.settings=_defaultMediaSettings();
+    return _ctrlZoomPanBlock(s);
   }
   function _clampMediaPan(zoom,val){var maxPan=Math.max(0,(zoom-1)*50);return Math.max(-maxPan,Math.min(maxPan,val||0));}
   function onSourceDisplayModeChange(id,val){
@@ -3184,34 +3570,48 @@
     _sourceRuntimeCall(id,'setSourceFrame',[s.settings.displayMode,s.settings.frameRatio]);
     renderSourceControlBody(s);
   }
-  function sourceZoomStep(id,delta){
+  // ZOOM — driven by the single range input (replaces the old Zoom −/Reset/
+  // Zoom + buttons). Split the same way the old joystick already split pan:
+  // a cheap per-INPUT-event push (sourceZoomInput, firing continuously while
+  // the thumb is dragged) and a single PERSIST step on release
+  // (sourceZoomCommit, bound to the range's native 'change' event) — see
+  // _bindZoomPanPreview()'s own comment below for why re-serializing
+  // sourcesState on every event would be a real cost, not a perf nicety.
+  function sourceZoomInput(id,zoomVal){
     var s=findSource(id);if(!s||!s.settings)return;
-    s.settings.zoom=Math.max(1,Math.min(4,(s.settings.zoom||1)+delta));
-    s.settings.panX=_clampMediaPan(s.settings.zoom,s.settings.panX);
-    s.settings.panY=_clampMediaPan(s.settings.zoom,s.settings.panY);
-    saveSourcesState();
-    _sourceRuntimeCall(id,'setSourceZoom',[s.settings.zoom,s.settings.panX,s.settings.panY]);
+    var z=Math.max(ZOOM_MIN,Math.min(ZOOM_MAX,parseFloat(zoomVal)||ZOOM_MIN));
+    s.settings.zoom=z;
+    s.settings.panX=_clampMediaPan(z,s.settings.panX);
+    s.settings.panY=_clampMediaPan(z,s.settings.panY);
+    if(_isSourcePreview(id))previewCall('setSourceZoom',[z,s.settings.panX,s.settings.panY]);
+    var rangeEl=document.getElementById('zoompan-range-'+id);
+    if(_isSourceLive(id)){
+      presenterCall('setSourceZoom',[z,s.settings.panX,s.settings.panY]);
+      // Throttled ~1-in-3, same reasoning as the pan controls below — real
+      // per-call overhead on the Android bridge that a same-origin iframe
+      // call doesn't have.
+      if(rangeEl){rangeEl._frameCount=(rangeEl._frameCount||0)+1;if(rangeEl._frameCount%3===0)_androidSourceCommand('setSourceZoom',[z,s.settings.panX,s.settings.panY]);}
+    }
+    _updateZoomPanBox(id);
+    var valEl=document.getElementById('zoompan-range-'+id+'-val');if(valEl)valEl.textContent=z.toFixed(2)+'x';
   }
-  function sourceZoomReset(id){
-    var s=findSource(id);if(!s||!s.settings)return;
-    s.settings.zoom=1;s.settings.panX=0;s.settings.panY=0;
-    saveSourcesState();
-    _sourceRuntimeCall(id,'setSourceZoom',[1,0,0]);
-  }
-  // ---- Pan JOYSTICK (spec 3) — replaces the old arrow d-pad. Dragging feeds
-  // continuous small deltas into the SAME _clampMediaPan()/setSourceZoom()
-  // pipeline the arrows and Reset button already used (never a second pan
-  // implementation). Split into a cheap per-frame RENDER update
-  // (joystickPanDelta, called up to 60x/sec while dragging) and a single
-  // PERSIST step on release (joystickPanCommit) — calling saveSourcesState()
-  // every frame would re-serialize the whole sourcesState (including every
-  // Image/Video/Collection's base64 data) to localStorage dozens of times a
-  // second, which is the actual reason this is split rather than a perf nicety.
-  // The Android bridge forward (real external display) is additionally
-  // throttled to ~1-in-3 frames — the local Preview/Live iframes still update
-  // every frame for a smooth on-screen drag — since JS-to-native calls carry
-  // real per-call overhead that direct same-origin iframe calls don't. ----
-  function joystickPanDelta(id,dx,dy,forwardToAndroid){
+  function sourceZoomCommit(id){saveSourcesState();}
+  // ---- PAN — click/drag anywhere in the preview, or press-and-hold one of
+  // the 4 D-pad buttons. Both funnel into this ONE delta function (never a
+  // second pan implementation) driving the exact same
+  // _clampMediaPan()/setSourceZoom() pipeline sourceZoomInput() above also
+  // uses. Split into a cheap per-frame RENDER update (sourcePanDelta, called
+  // up to 60x/sec while dragging/holding) and a single PERSIST step on
+  // release (sourcePanCommit) — calling saveSourcesState() every frame would
+  // re-serialize the whole sourcesState (including every Image/Video/
+  // Collection's base64 data) to localStorage dozens of times a second,
+  // which is the actual reason this is split rather than a perf nicety. The
+  // Android bridge forward (real external display) is additionally
+  // throttled to ~1-in-3 frames — the local Preview/Live iframes still
+  // update every frame for a smooth on-screen drag — since JS-to-native
+  // calls carry real per-call overhead that direct same-origin iframe calls
+  // don't. ----
+  function sourcePanDelta(id,dx,dy,forwardToAndroid){
     var s=findSource(id);if(!s||!s.settings)return;
     var z=s.settings.zoom||1;
     s.settings.panX=_clampMediaPan(z,(s.settings.panX||0)+dx);
@@ -3221,56 +3621,128 @@
       presenterCall('setSourceZoom',[z,s.settings.panX,s.settings.panY]);
       if(forwardToAndroid)_androidSourceCommand('setSourceZoom',[z,s.settings.panX,s.settings.panY]);
     }
+    _updateZoomPanBox(id);
   }
-  function joystickPanCommit(){saveSourcesState();}
-  function setupSourceJoystick(sourceId,wrapEl){
-    var base=wrapEl.querySelector('.joystick-base'), knob=wrapEl.querySelector('.joystick-knob');
-    if(!base||!knob||base._joystickBound)return;
-    base._joystickBound=true;
-    var MAX_R=32, PAN_PER_FRAME=1.5;
-    var dragging=false,vx=0,vy=0,pointerId=null,rafId=null,frameCount=0;
-    function frame(){
-      if(!dragging)return;
-      if(vx||vy){frameCount++;joystickPanDelta(sourceId,vx*PAN_PER_FRAME,vy*PAN_PER_FRAME,(frameCount%3===0));}
-      rafId=requestAnimationFrame(frame);
+  // Absolute variant of sourcePanDelta() above — used by _bindZoomPanPreview()
+  // so a tap/drag anywhere in the preview can jump straight to that point
+  // instead of accumulating relative deltas. Inverts _zoomPanBoxRect()'s own
+  // box-center formula (cx = 50 - panX/zoom) to solve for the panX/panY that
+  // would center the box on (cxPercent,cyPercent) — same clamp, same
+  // downstream calls, so this can never drift out of sync with the delta path.
+  function sourcePanToPoint(id,cxPercent,cyPercent,forwardToAndroid){
+    var s=findSource(id);if(!s||!s.settings)return;
+    var z=s.settings.zoom||1;
+    s.settings.panX=_clampMediaPan(z,(50-cxPercent)*z);
+    s.settings.panY=_clampMediaPan(z,(50-cyPercent)*z);
+    if(_isSourcePreview(id))previewCall('setSourceZoom',[z,s.settings.panX,s.settings.panY]);
+    if(_isSourceLive(id)){
+      presenterCall('setSourceZoom',[z,s.settings.panX,s.settings.panY]);
+      if(forwardToAndroid)_androidSourceCommand('setSourceZoom',[z,s.settings.panX,s.settings.panY]);
     }
-    function updateFromEvent(e){
-      var r=base.getBoundingClientRect();
-      var dx=e.clientX-(r.left+r.width/2), dy=e.clientY-(r.top+r.height/2);
-      var dist=Math.min(Math.hypot(dx,dy),MAX_R);
-      var angle=Math.atan2(dy,dx);
-      var kx=Math.cos(angle)*dist, ky=Math.sin(angle)*dist;
-      knob.style.transform='translate(calc(-50% + '+kx+'px), calc(-50% + '+ky+'px))';
-      var norm=dist>2?dist/MAX_R:0;
-      vx=norm?Math.cos(angle)*norm:0; vy=norm?Math.sin(angle)*norm:0;
+    _updateZoomPanBox(id);
+  }
+  function sourcePanCommit(){saveSourcesState();}
+  // Tap/drag anywhere in .zoompan-preview repositions .zoompan-box centered
+  // on the pointer — PointerEvent covers mouse/touch/pen with one listener
+  // set (no separate touch/mouse implementations). touch-action:none on
+  // .zoompan-preview (see CSS) stops the drag from ever being interpreted as
+  // a page/list scroll. The box's own CSS transition is disabled for the
+  // duration of the drag (.dragging) so it tracks the pointer with zero lag,
+  // then re-enabled on release so the NEXT move (range/D-pad/next tap)
+  // glides instead of snapping.
+  // Percentages are computed against .zoompan-frame-box's rect, NOT the
+  // outer .zoompan-preview — .zoompan-box's own left/top/width/height are
+  // percentages of that same frame-box (see _zoomPanFrameBoxRect()'s own
+  // comment), so using the wrong rect here would tap one point but move the
+  // box to a DIFFERENT one whenever Frame Ratio isn't 'auto'. A tap that
+  // lands in the outer pillarbox/letterbox area (outside the frame-box)
+  // clamps to that box's nearest edge instead of being ignored.
+  function _bindZoomPanPreview(sourceId,previewEl){
+    if(previewEl._zpBound)return;
+    previewEl._zpBound=true;
+    var box=previewEl.querySelector('.zoompan-box');
+    var frameBox=previewEl.querySelector('.zoompan-frame-box')||previewEl;
+    var dragging=false,pointerId=null,frameCount=0;
+    function apply(e){
+      var r=frameBox.getBoundingClientRect();
+      if(!r.width||!r.height)return;
+      var cx=Math.max(0,Math.min(100,((e.clientX-r.left)/r.width)*100));
+      var cy=Math.max(0,Math.min(100,((e.clientY-r.top)/r.height)*100));
+      frameCount++;
+      sourcePanToPoint(sourceId,cx,cy,(frameCount%3===0));
     }
     function end(e){
       if(!dragging||(e&&e.pointerId!==pointerId))return;
-      if(pointerId!=null){try{base.releasePointerCapture(pointerId);}catch(err){}}
-      dragging=false;vx=0;vy=0;pointerId=null;
-      if(rafId){cancelAnimationFrame(rafId);rafId=null;}
-      knob.style.transition='transform .18s ease';
-      knob.style.transform='translate(-50%,-50%)';
-      base.classList.remove('dragging');
-      joystickPanCommit(); // one localStorage write per gesture, not per frame
+      if(pointerId!=null){try{previewEl.releasePointerCapture(pointerId);}catch(err){}}
+      dragging=false;pointerId=null;
+      if(box)box.classList.remove('dragging');
+      sourcePanCommit(); // one localStorage write per gesture, not per frame
     }
-    base.addEventListener('pointerdown',function(e){
+    previewEl.addEventListener('pointerdown',function(e){
       if(e.pointerType==='mouse'&&e.button!==0)return;
       e.preventDefault();e.stopPropagation(); // never bubble into anything else on the panel
       dragging=true;pointerId=e.pointerId;frameCount=0;
-      base.classList.add('dragging');
-      knob.style.transition='none';
-      try{base.setPointerCapture(pointerId);}catch(err){}
-      updateFromEvent(e);
-      if(!rafId)rafId=requestAnimationFrame(frame);
+      if(box)box.classList.add('dragging');
+      try{previewEl.setPointerCapture(pointerId);}catch(err){}
+      apply(e);
     });
-    base.addEventListener('pointermove',function(e){
+    previewEl.addEventListener('pointermove',function(e){
       if(!dragging||e.pointerId!==pointerId)return;
       e.preventDefault();
-      updateFromEvent(e);
+      apply(e);
     });
-    base.addEventListener('pointerup',end);
-    base.addEventListener('pointercancel',end);
+    previewEl.addEventListener('pointerup',end);
+    previewEl.addEventListener('pointercancel',end);
+  }
+  // The 4 D-pad buttons — press-and-hold nudges pan at a steady rate via the
+  // exact same requestAnimationFrame + sourcePanDelta()/sourcePanCommit()
+  // pattern the old joystick used, just fed a fixed direction vector instead
+  // of one read from a drag angle.
+  // sourcePanDelta()'s dx/dy are added directly to settings.panX/panY, which
+  // _zoomPanBoxRect() turns into the crop box's center via cx = 50 - panX/z —
+  // i.e. INCREASING panX moves the box (and what the box reveals) further
+  // LEFT, not right. These vectors are the negative of the "up/down/left/
+  // right" direction name specifically so pressing e.g. Right actually pans
+  // the visible crop box (and Preview/Live) to the right.
+  var _DPAD_VECTORS={up:[0,1],down:[0,-1],left:[1,0],right:[-1,0]};
+  function _bindZoomPanDirButton(el,sourceId,dx,dy){
+    if(!el||el._zpDirBound)return;
+    el._zpDirBound=true;
+    var PAN_PER_FRAME=1.5;
+    var active=false,pointerId=null,rafId=null,frameCount=0;
+    function frame(){
+      if(!active)return;
+      frameCount++;
+      sourcePanDelta(sourceId,dx*PAN_PER_FRAME,dy*PAN_PER_FRAME,(frameCount%3===0));
+      rafId=requestAnimationFrame(frame);
+    }
+    function stop(e){
+      if(!active||(e&&e.pointerId!==pointerId))return;
+      if(pointerId!=null){try{el.releasePointerCapture(pointerId);}catch(err){}}
+      active=false;pointerId=null;
+      if(rafId){cancelAnimationFrame(rafId);rafId=null;}
+      sourcePanCommit();
+    }
+    el.addEventListener('pointerdown',function(e){
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      e.preventDefault();e.stopPropagation();
+      active=true;pointerId=e.pointerId;frameCount=0;
+      try{el.setPointerCapture(pointerId);}catch(err){}
+      if(!rafId)rafId=requestAnimationFrame(frame);
+    });
+    el.addEventListener('pointerup',stop);
+    el.addEventListener('pointercancel',stop);
+    el.addEventListener('pointerleave',stop);
+  }
+  function _bindZoomPanControls(s){
+    var preview=document.getElementById('zoompan-preview-'+s.id);
+    if(preview)_bindZoomPanPreview(s.id,preview);
+    for(var dir in _DPAD_VECTORS){
+      var btn=document.getElementById('zoompan-dpad-'+dir+'-'+s.id);
+      if(btn)_bindZoomPanDirButton(btn,s.id,_DPAD_VECTORS[dir][0],_DPAD_VECTORS[dir][1]);
+    }
+    var rangeEl=document.getElementById('zoompan-range-'+s.id);
+    if(rangeEl&&!rangeEl._zpChangeBound){rangeEl._zpChangeBound=true;rangeEl.addEventListener('change',function(){sourceZoomCommit(s.id);});}
   }
 
   // ---- Video (spec 4) ----
@@ -3346,7 +3818,14 @@
   }
   function _ctrlVideoBody(s){
     var endOpts=[{v:'stop',label:'Stop'},{v:'loop',label:'Loop'},{v:'presentSource',label:'Present Another Source'}];
-    var transitionOpts=[{v:'start',label:'Play video from start'},{v:'resume',label:'Resume video'},{v:'manual',label:'Manual control'}];
+    // See syncPreviewToLiveVideo() for exactly what each mode does to
+    // Preview/Live's timeline and play/pause state at the moment of transition.
+    var transitionOpts=[
+      {v:'autostart',label:'Auto-play from the start'},
+      {v:'autopreview',label:'Auto-play preview'},
+      {v:'startPaused',label:'From the start (Paused)'},
+      {v:'previewPaused',label:'Preview (Paused)'}
+    ];
     var html='<div class="source-ctrl-section">'
       +'<div class="source-ctrl-section-label">Transport</div>'
       +'<div class="video-transport-row">'
@@ -3365,7 +3844,7 @@
       html+='<div style="margin-top:10px;">'+_ctrlDropdownRow('Present Source',targetOpts,s.endTargetId||'',function(v){return "onVideoEndTargetChange('"+s.id+"','"+v+"')";})+'</div>';
     }
     html+='</div>';
-    html+='<div class="source-ctrl-section">'+_ctrlDropdownRow('LIVE TRANSITION EFFECT',transitionOpts,s.playAfter||'start',function(v){return "onVideoPlayAfterChange('"+s.id+"','"+v+"')";})+'</div>';
+    html+='<div class="source-ctrl-section">'+_ctrlDropdownRow('LIVE TRANSITION EFFECT',transitionOpts,s.playAfter||'autostart',function(v){return "onVideoPlayAfterChange('"+s.id+"','"+v+"')";})+'</div>';
     return html;
   }
 
@@ -3439,7 +3918,7 @@
       +'<div style="flex:1;text-align:center;font-size:13px;color:var(--text);">Page '+page+' / '+total+'</div>'
       +'<button class="icon-btn" onclick="pdfPageStep(\''+s.id+'\',1)"'+(page>=total?' disabled':'')+'><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button>'
       +'</div></div>';
-    // Display Mode / Frame Ratio / Zoom / Pan Joystick, THEN the horizontal
+    // Display Mode / Frame Ratio / Zoom & Pan, THEN the horizontal
     // page-thumbnail strip last — matches the shared grouping order used by
     // every other media source type.
     html+=_ctrlFrameZoomSection(s);
@@ -3815,7 +4294,9 @@
     list.innerHTML=stanzas.map(function(p,i){
       var isLive=_isLiveSongStanza(ctrlState.currentSongId,i);
       var preview=p.text.substring(0,100)+(p.text.length>100?'...':'');
-      var tag=isLive?'<span class="live-tag">LIVE</span>':'';
+      // While Blank has cleared the real output, the on-deck slide keeps its
+      // highlight but reads PREVIEW instead of LIVE (see ctrlState.blanked).
+      var tag=isLive?(ctrlState.blanked?'<span class="preview-tag">PREVIEW</span>':'<span class="live-tag">LIVE</span>'):'';
       return '<div class="stanza-btn'+(isLive?' now-showing':'')+(p.isSubPart?' sub-part':'')+'" onclick="showStanza('+i+')">'+
         '<div class="stanza-btn-label"><span>'+escH(p.label)+'</span><span style="display:flex;align-items:center;gap:6px;">'+tag+'</span></div>'+
         '<div class="stanza-btn-text">'+escH(preview)+'</div>'+
@@ -3944,7 +4425,9 @@
       if(!ctrlState.recentVerses.length){scrollEl.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><p>No recent verses yet.<br>Verses appear here once presented.</p></div>';return;}
       scrollEl.innerHTML=ctrlState.recentVerses.map(function(r,i){
         var isLive=_isLiveBibleVerse(r.vn,r.bookN,r.ch,r.ver);
-        var tag=isLive?'<span style="font-size:9px;background:var(--success);color:#fff;border-radius:4px;padding:1px 5px;margin-right:4px;">LIVE</span>':'';
+        // While Blank has cleared the real output, the on-deck verse keeps its
+        // highlight but reads PREVIEW instead of LIVE (see ctrlState.blanked).
+        var tag=isLive?(ctrlState.blanked?'<span class="preview-tag" style="margin-right:4px;">PREVIEW</span>':'<span style="font-size:9px;background:var(--success);color:#fff;border-radius:4px;padding:1px 5px;margin-right:4px;">LIVE</span>'):'';
         return '<div class="verse-btn'+(isLive?' now-showing':'')+'" onclick="replayRecentVerse('+i+')"><div style="display:flex;flex-direction:column;flex:1;gap:3px;min-width:0;"><div style="font-size:11px;color:var(--accent);font-weight:700;">'+tag+escH(r.ref)+'</div><div class="verse-btn-text">'+escH(r.text)+'</div></div></div>';
       }).join('');
       return;
@@ -3954,7 +4437,8 @@
     if(tab==='verses'){
       scrollEl.innerHTML=verses.map(function(v){
         var isLive=_isLiveBibleVerse(v.n,ctrlState.bibleBook,ctrlState.bibleChapter,ctrlState.bibleVersion);
-        var tag='<div class="verse-live-tag" style="font-size:9px;background:var(--success);color:#fff;border-radius:4px;padding:1px 5px;align-self:flex-start;flex-shrink:0;'+(isLive?'':'display:none;')+'">LIVE</div>';
+        var isBlankedLive=isLive&&ctrlState.blanked;
+        var tag='<div class="verse-live-tag" style="font-size:9px;background:'+(isBlankedLive?'var(--accent)':'var(--success)')+';color:#fff;border-radius:4px;padding:1px 5px;align-self:flex-start;flex-shrink:0;'+(isLive?'':'display:none;')+'">'+(isBlankedLive?'PREVIEW':'LIVE')+'</div>';
         return '<div class="verse-btn'+(isLive?' now-showing':'')+'" id="cv'+v.n+'" onclick="showVerse('+v.n+')"><div class="verse-btn-num">'+v.n+'</div><div class="verse-btn-text">'+escH(v.t)+'</div>'+tag+'</div>';
       }).join('');
     } else if(tab==='numbers'){
@@ -3976,9 +4460,14 @@
       ctrlState.bibleVerses.forEach(function(v){
         var el=document.getElementById('cv'+v.n);if(!el)return;
         var isLive=_isLiveBibleVerse(v.n,ctrlState.bibleBook,ctrlState.bibleChapter,ctrlState.bibleVersion);
+        var isBlankedLive=isLive&&ctrlState.blanked;
         el.classList.toggle('now-showing',isLive);
         var tagEl=el.querySelector('.verse-live-tag');
-        if(tagEl)tagEl.style.display=isLive?'':'none';
+        if(tagEl){
+          tagEl.style.display=isLive?'':'none';
+          tagEl.textContent=isBlankedLive?'PREVIEW':'LIVE';
+          tagEl.style.background=isBlankedLive?'var(--accent)':'var(--success)';
+        }
       });
     } else if(tab==='numbers'){
       ctrlState.bibleVerses.forEach(function(v){
@@ -4496,10 +4985,10 @@
     return '<button class="appear-btn" style="flex:1;" onclick="openAppearPopupField(\''+tab+'\',\''+field+'\',\''+escJ(label)+'\')">'+
       '<div class="color-swatch" style="background:'+color+';"></div>'+escH(label)+'</button>';
   }
-  function _fabRangeRow(label,id,min,max,val,unit,onchangeExpr){
+  function _fabRangeRow(label,id,min,max,val,unit,onchangeExpr,step){
     unit=unit||'';
     return '<div class="range-row"><label>'+escH(label)+'</label>'+
-      '<input type="range" id="'+id+'" min="'+min+'" max="'+max+'" value="'+val+'" oninput="'+onchangeExpr+'">'+
+      '<input type="range" id="'+id+'" min="'+min+'" max="'+max+'"'+(step?' step="'+step+'"':'')+' value="'+val+'" oninput="'+onchangeExpr+'">'+
       '<span class="range-val" id="'+id+'-val">'+val+unit+'</span></div>';
   }
   // Font weight is offered as Normal/Bold rather than a continuous slider —
@@ -4809,7 +5298,7 @@
     var grid=document.getElementById('monitor-grid');
     if(!handle||!stage||!tabsEl||!headerEl)return;
 
-    var MIN_PREVIEW=167;    // smallest "open" preview height before it snaps collapsed
+    var MIN_PREVIEW=180;    // smallest "open" preview height before it snaps collapsed
     var COLLAPSE_BELOW=75;  // release/drag below this height -> fully collapse
     var MIN_CONTROLS=130;   // Controls (tabs+panel) never shrinks below this
     var naturalHeight=null; // measured once on load; used for reset (double-click)
@@ -4889,6 +5378,10 @@
       setTimeout(function(){syncPreviewScale();updateMonitorResponsive();},animate?190:0);
       return px;
     }
+    // Exposes the "collapse to 0, animated" half of applyHeight to
+    // closeMonitor() (declared earlier in the script) — see its own comment
+    // on why it can't just reach in and call applyHeight() directly.
+    _collapseMonitorStage=function(animate){applyHeight(0,animate);};
 
     var startY=0,startH=0,dragging=false;
 

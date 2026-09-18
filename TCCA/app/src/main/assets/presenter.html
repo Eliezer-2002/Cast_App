@@ -142,7 +142,7 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;-webkit-text-si
 }
 #camera-video{
   position:absolute;inset:0;width:100%;height:100%;
-  object-fit:contain;background:#000;display:none;
+  object-fit:contain;background:#000;display:none;transform-origin:center center;
 }
 /* PDF is now rendered for real (pdfjs-dist) onto this canvas instead of the
    WebView's native PDF plugin — same frame/zoom mechanism as #media/#video
@@ -604,10 +604,11 @@ function _applyMediaZoomTransform(){
   var z=Math.max(1,Math.min(4,_srcZoom||1));
   var px=_clampPan(z,_srcPanX), py=_clampPan(z,_srcPanY);
   var t='translate('+px+'%,'+py+'%) scale('+z+')';
-  var media=document.getElementById('media'), video=document.getElementById('video'), pdf=document.getElementById('pdf-canvas');
+  var media=document.getElementById('media'), video=document.getElementById('video'), pdf=document.getElementById('pdf-canvas'), cam=document.getElementById('camera-video');
   if(media)media.style.transform=t;
   if(video)video.style.transform=t;
   if(pdf)pdf.style.transform=t;
+  if(cam)cam.style.transform=t;
   // #pptx-inner is intrinsically sized (not width:100%/height:100% like the
   // three elements above), so it's centered via translate(-50%,-50%) from a
   // top:50%/left:50% position (see presenter.html's <style>) and its Display
@@ -662,6 +663,15 @@ function getVideoStatus(){
   if(!v)return null;
   return {currentTime:v.currentTime||0,duration:isFinite(v.duration)?v.duration:0,paused:v.paused};
 }
+// Polled by controller.html's _waitForVideoReady() (LIVE TRANSITION EFFECT —
+// see syncPreviewToLiveVideo() there) as the immediate/fast-path check before
+// falling back to the 'loadedmetadata' event below. readyState>=1 (HAVE_METADATA)
+// is the point at which duration is known and seekTo (below) stops silently
+// clamping to 0 — see videoControl()'s own dur=isFinite(v.duration)?... line.
+function isVideoReady(){
+  var v=document.getElementById('video');
+  return !!v&&v.readyState>=1;
+}
 (function(){
   var v=document.getElementById('video');
   if(!v)return;
@@ -677,6 +687,22 @@ function getVideoStatus(){
     try{
       if(window.parent&&window.parent!==window&&typeof window.parent.__onSourceVideoEnded==='function'){
         window.parent.__onSourceVideoEnded(window.__frameRole||null);
+      }
+    }catch(e){}
+  });
+  // LIVE TRANSITION EFFECT render-delay fix (see controller.html's
+  // _waitForVideoReady()/syncPreviewToLiveVideo()) — assigning a fresh src to
+  // this element (showGap('video',...) above) resets its readyState
+  // synchronously, and videoControl()'s seekTo silently clamps to 0 while
+  // duration is still unknown. This same persistent <video> element is reused
+  // for every video Source, so 'loadedmetadata' fires again on every future
+  // src swap — exactly the signal controller.html needs before it's actually
+  // safe to seek/play. Same same-origin bridge pattern as 'ended' above;
+  // harmlessly no-ops for the real external cast Presentation.
+  v.addEventListener('loadedmetadata',function(){
+    try{
+      if(window.parent&&window.parent!==window&&typeof window.parent.__onSourceVideoReady==='function'){
+        window.parent.__onSourceVideoReady(window.__frameRole||null);
       }
     }catch(e){}
   });
