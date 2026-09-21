@@ -45,6 +45,11 @@
     .cast-status span { padding-top: 3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
     .cast-status.live span { font-size:10px; font-weight:800; letter-spacing:.04em; color:var(--success); }
     .cast-status.offline span { font-size:10px; font-weight:800; letter-spacing:.04em; color:var(--danger); }
+    /* Direct Stream (DLNA) status line — see lowlatency-cast.js */
+    #direct-obs-status[data-state="error"] { color:var(--danger); }
+    #direct-obs-status[data-state="streaming"] { color:var(--success); }
+    #direct-obs-status[data-state="connecting"],
+    #direct-obs-status[data-state="discovering"] { color:var(--warn); }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
     .close-ctrl-btn { width:32px; height:32px; border-radius:9px; background:var(--bg3); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text2); flex-shrink:0; }
     .close-ctrl-btn:active { transform:scale(.92); }
@@ -899,6 +904,22 @@
     <input type="hidden" id="gap-fs" value="52">
 
     <div style="flex:1;overflow-y:auto;">
+      <!-- Direct OBS Stream (DLNA/UPnP) — a separate, low-latency push path to a
+           DLNA MediaRenderer (e.g. an AnyCast dongle), independent of the mirror-
+           casting Presentation API above. Lives in Sources since, like a Source,
+           it's about what the cast display is showing — never touches source
+           cards/state itself. See lowlatency-cast.js / LowLatencyCastBridge.java. -->
+      <div class="sources-section-label">OBS / Live Stream</div>
+      <div style="padding:0 10px 10px;">
+        <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;">
+          <input id="obs-stream-url" type="url" value="http://10.114.182" placeholder="http://192.168.1.20:8080/live.ts"
+            style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-size:13px;font-family:'NotoSansTamil',sans-serif;outline:none;box-sizing:border-box;">
+          <button class="btn btn-primary btn-sm" style="width:100%;" id="obs-stream-start" type="button">🎥 Switch TV to Live OBS</button>
+          <button class="btn btn-secondary btn-sm" style="width:100%;" id="obs-stream-stop" type="button">📄 Switch TV back to Verses/Lyrics</button>
+          <span id="direct-obs-status" style="font-size:11px;color:var(--text2);min-height:14px;"></span>
+        </div>
+      </div>
+
       <div class="sources-section-label">Added Sources</div>
       <div id="sources-list-user" style="padding:0 10px;display:flex;flex-direction:column;gap:8px;"></div>
       <!-- Edit Added Sources (bottom-left) and Add Source (bottom-right) belong to
@@ -5533,5 +5554,6 @@
     forget:function(id,dataUrl){delete _pptxMeta[id];if(dataUrl)PptxEngine.clearPptx(dataUrl);}
   };
   </script>
+  <script src="lowlatency-cast.js"></script>
 </body>
 </html>

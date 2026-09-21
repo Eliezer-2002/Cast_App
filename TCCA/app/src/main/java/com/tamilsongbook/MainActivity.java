@@ -353,6 +353,14 @@ public class MainActivity extends Activity {
             }});
         }
 
+        // Java-only (deliberately NOT @JavascriptInterface): lets LowLatencyCastBridge relay
+        // its direct-stream status to presenter.html through the same runJS() path as above.
+        void forwardToPresenter(final String js) {
+            runOnUiThread(new Runnable() { public void run() {
+                if (castPresentation != null) castPresentation.runJS(js);
+            }});
+        }
+
         // Clears ONLY the Song/Bible overlay on the real cast display (see
         // presenter.html's LAYER ARCHITECTURE) — the Sources base layer underneath
         // is left untouched. Called by controller.html's Blank quick-action instead

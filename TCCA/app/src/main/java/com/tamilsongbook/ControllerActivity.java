@@ -31,6 +31,11 @@ public class ControllerActivity extends Activity {
             checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
     }
 
+    // Low-latency DLNA/UPnP direct-stream path — independent of MainActivity.jsBridge
+    // ("Android") above; registered under its own bridge name so it can never collide
+    // with, or be mistaken for, the mirror-casting bridge.
+    private LowLatencyCastBridge lowLatencyBridge;
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == MainActivity.FILE_CHOOSER_REQUEST) {
@@ -57,6 +62,8 @@ public class ControllerActivity extends Activity {
                 runOnUiThread(new Runnable() { public void run() { finish(); } });
             }
         }, "AndroidCtrl");
+        lowLatencyBridge = new LowLatencyCastBridge(getApplicationContext(), ccwWebView);
+        ccwWebView.addJavascriptInterface(lowLatencyBridge, "LowLatencyCast");
         ccwWebView.loadUrl("file:///android_asset/controller.html");
 
         // Ask up front so a runtime prompt isn't fired mid-getUserMedia() from
@@ -102,6 +109,7 @@ public class ControllerActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (lowLatencyBridge != null) { lowLatencyBridge.release(); lowLatencyBridge = null; }
         if (ccwWebView != null) { ccwWebView.destroy(); ccwWebView = null; }
     }
 

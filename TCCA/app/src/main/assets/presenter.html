@@ -220,6 +220,7 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;-webkit-text-si
 </style>
 </head>
 <body>
+<div id="presentationContentLayer" style="display: block; width: 100vw; height: 100vh;">
 <div id="screen">
   <div id="sources-layer">
     <div id="source-content-area">
@@ -255,8 +256,20 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;-webkit-text-si
     </div>
   </div>
 </div>
+</div><!-- /#presentationContentLayer -->
 
 <script>
+// Called by LowLatencyCastBridge (via MainActivity.JSBridge.forwardToPresenter) on every
+// direct-stream state change. While the TV renders the OBS stream in hardware, hide the
+// HTML layer; any other state (stopped/error/found/…) restores it. Opacity only — no
+// presentation state is touched, so the slide underneath is exactly as it was.
+function onDirectStreamStatus(status){
+  try{
+    var st=status&&status.state;
+    var layer=document.getElementById('presentationContentLayer');
+    if(layer)layer.style.opacity=(st==='streaming'||st==='connecting')?'0':'1';
+  }catch(e){}
+}
 var clockInterval = null;
 // Sources and Overlay are independent layers now, so each tracks its own
 // "what's currently showing" mode separately — see LAYER ARCHITECTURE above.
