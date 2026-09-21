@@ -259,15 +259,35 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;-webkit-text-si
 </div><!-- /#presentationContentLayer -->
 
 <script>
+// Direct-stream state, kept at script scope so it survives between onDirectStreamStatus() calls.
+// isCurrentlyStreaming: a stream is starting or playing → the HTML layer stays hidden.
+// directStreamConfirmed: the renderer has actually reported "streaming" (not just "connecting").
+let isCurrentlyStreaming = false;
+let directStreamConfirmed = false;
+
 // Called by LowLatencyCastBridge (via MainActivity.JSBridge.forwardToPresenter) on every
 // direct-stream state change. While the TV renders the OBS stream in hardware, hide the
-// HTML layer; any other state (stopped/error/found/…) restores it. Opacity only — no
+// HTML layer. Only a terminal state restores it; intermediate rescan states
+// (discovering/found) and unknown/malformed updates never do. Opacity only — no
 // presentation state is touched, so the slide underneath is exactly as it was.
 function onDirectStreamStatus(status){
   try{
     var st=status&&status.state;
     var layer=document.getElementById('presentationContentLayer');
-    if(layer)layer.style.opacity=(st==='streaming'||st==='connecting')?'0':'1';
+    if(!layer)return;
+    if(st==='connecting'||st==='streaming'){
+      isCurrentlyStreaming=true;
+      directStreamConfirmed=(st==='streaming');
+      layer.style.opacity='0';
+    }else if(st==='stopped'||(st==='error'&&isCurrentlyStreaming&&!directStreamConfirmed)){
+      // "error" is terminal only for a start attempt that never reached "streaming"
+      // (nothing is playing on the TV); an error during a mid-stream rescan or a failed
+      // Stop must not un-hide the layer while the video may still be playing.
+      isCurrentlyStreaming=false;
+      directStreamConfirmed=false;
+      layer.style.opacity='1';
+    }
+    // discovering / found / other errors / unknown / malformed: ignored.
   }catch(e){}
 }
 var clockInterval = null;

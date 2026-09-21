@@ -912,7 +912,7 @@
       <div class="sources-section-label">OBS / Live Stream</div>
       <div style="padding:0 10px 10px;">
         <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;">
-          <input id="obs-stream-url" type="url" value="http://10.114.182" placeholder="http://192.168.1.20:8080/live.ts"
+          <input id="obs-stream-url" type="url" value="" placeholder="http://192.168.1.20:8080/live.ts"
             style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-size:13px;font-family:'NotoSansTamil',sans-serif;outline:none;box-sizing:border-box;">
           <button class="btn btn-primary btn-sm" style="width:100%;" id="obs-stream-start" type="button">🎥 Switch TV to Live OBS</button>
           <button class="btn btn-secondary btn-sm" style="width:100%;" id="obs-stream-stop" type="button">📄 Switch TV back to Verses/Lyrics</button>
@@ -1217,7 +1217,7 @@
       </div>
       <div class="preview-row">
         <div class="preview-box"></div>
-        <input type="text" class="hex-input" maxlength="9" value="#6366f1">
+        <input name="color" type="text" class="hex-input" maxlength="9" value="#6366f1">
       </div>
       <div class="rgba-row">
         <div class="rgba-chip">R <span id="chip-R">99</span></div>
@@ -1262,6 +1262,63 @@
 
   function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
   function load(k,d){try{var v=localStorage.getItem(k);return v!==null?JSON.parse(v):d;}catch(e){return d;}}
+
+  // ============================================================
+  // CONTROLLER INPUT PERSISTENCE — plain-string, "cast_"-namespaced keys for the
+  // user's current input/selection (kept apart from save()/load() above, which
+  // JSON-encode the app's own data). Every storage call is try/catch-wrapped, so
+  // unavailable/corrupt storage just makes the controller behave non-persistently.
+  // Restoring only fills controls / ctrlState — it never presents anything.
+  // ============================================================
+  function saveControllerState(key,value){
+    try{localStorage.setItem(key,value==null?'':String(value));}catch(e){}
+  }
+  function loadControllerState(key,fallback){
+    try{var v=localStorage.getItem(key);return v!==null?v:fallback;}catch(e){return fallback;}
+  }
+  // Text inputs to persist: element id → storage key. (Only the OBS URL is a free-text
+  // input; the Bible/Song selection has no <input>, see restoreControllerState().)
+  var PERSISTED_CONTROLLER_FIELDS={'obs-stream-url':'cast_obs_url'};
+  // Older builds stored the OBS URL under this key (on Start only) — read once as a fallback.
+  var LEGACY_CONTROLLER_KEYS={'cast_obs_url':'directObsUrl'};
+  function bindPersistedControllerFields(){
+    Object.keys(PERSISTED_CONTROLLER_FIELDS).forEach(function(id){
+      var el=document.getElementById(id),key=PERSISTED_CONTROLLER_FIELDS[id];
+      if(!el)return;
+      var v=loadControllerState(key,null);
+      if(v===null&&LEGACY_CONTROLLER_KEYS[key])v=loadControllerState(LEGACY_CONTROLLER_KEYS[key],null);
+      // A blank/whitespace value never replaces a non-empty markup default.
+      if(v!==null&&(v.trim()!==''||!el.defaultValue))el.value=v;
+      el.addEventListener('input',function(){saveControllerState(key,el.value);});
+    });
+  }
+  function _intInRange(s,min,max){var n=parseInt(s,10);return(n>=min&&n<=max)?n:null;}
+  // Restores the Bible selection (version/book/chapter/verse) and the open song/slide.
+  // Runs from init() before the labels are drawn and the chapter is loaded, so the
+  // existing init flow then renders the restored state; invalid saved values are ignored.
+  function restoreControllerState(){
+    bindPersistedControllerFields();
+    var ver=loadControllerState('cast_bible_version',null);
+    if(ver&&VERSIONS.some(function(x){return x.v===ver;}))ctrlState.bibleVersion=ver;
+    var book=_intInRange(loadControllerState('cast_bible_book',null),1,BIBLE_BOOKS.length);
+    if(book!==null){
+      ctrlState.bibleBook=book;
+      var ch=_intInRange(loadControllerState('cast_bible_chapter',null),1,BIBLE_BOOKS[book-1].ch);
+      ctrlState.bibleChapter=ch!==null?ch:1;
+      var vn=_intInRange(loadControllerState('cast_bible_verse',null),1,999);
+      if(vn!==null&&ch!==null)ctrlState.currentVerseIdx=vn;  // navVerse() continues from here; nothing is shown
+    }
+    var songId=loadControllerState('cast_song_id','');
+    if(songId){
+      var song=songs.find(function(s){return String(s.id)===songId;});
+      if(song){
+        var idx=_intInRange(loadControllerState('cast_song_stanza',null),0,9999);
+        if(idx!==null)ctrlState.currentStanzaIdx=idx;
+        openSongStanzas(song.id);   // view only — presents nothing
+        if(ctrlState.currentStanzaIdx>=ctrlState.currentStanzas.length){ctrlState.currentStanzaIdx=0;renderStanzaList();}
+      }
+    }
+  }
 
   // ============================================================
   // TOAST — mirrors index.html's own #toast/toast()/toastWarn() (same shape,
@@ -4299,6 +4356,7 @@
   function openSongStanzas(songId){
     var song=songs.find(function(s){return s.id===songId;});if(!song)return;
     ctrlState.currentSongId=songId;
+    saveControllerState('cast_song_id',songId);
     var stanzas=parseLyrics(song.lyrics);
     ctrlState.currentStanzas=stanzas;
     if(ctrlState.currentStanzaIdx<0&&stanzas.length>0)ctrlState.currentStanzaIdx=0;
@@ -4333,6 +4391,7 @@
   function showStanza(idx){
     var song=songs.find(function(s){return s.id===ctrlState.currentSongId;});if(!song)return;
     ctrlState.currentStanzaIdx=idx;
+    saveControllerState('cast_song_stanza',idx);
     var bg=getSongBG();
     var tc=tabAppearance.songs.titleColor;
     var lc=tabAppearance.songs.lyricColor;
@@ -4370,7 +4429,7 @@
     push('updateFontWeight',bodyWeight);
   }
   function navStanza(dir){var next=ctrlState.currentStanzaIdx+dir;if(next>=0&&next<ctrlState.currentStanzas.length)showStanza(next);}
-  function backToSongList(){ctrlState.currentStanzaIdx=-1;document.getElementById('stanzas-view').style.display='none';document.getElementById('songs-view').style.display='flex';}
+  function backToSongList(){ctrlState.currentStanzaIdx=-1;saveControllerState('cast_song_id','');document.getElementById('stanzas-view').style.display='none';document.getElementById('songs-view').style.display='flex';}
 
   function getSongBG(){if(tabAppearance.songs.bgImage)return tabAppearance.songs.bgImage;return tabAppearance.songs.bg;}
   function getGapBG(){if(tabAppearance.gap.bgImage)return tabAppearance.gap.bgImage;return tabAppearance.gap.bg;}
@@ -4508,6 +4567,7 @@
   function showVerse(vn){
     var v=ctrlState.bibleVerses.find(function(x){return x.n===vn;});if(!v)return;
     ctrlState.currentVerseIdx=vn;
+    saveControllerState('cast_bible_verse',vn);
     var isTamil=TAMIL_VERSIONS.indexOf(ctrlState.bibleVersion)>-1;
     var bookName=isTamil?TAMIL_BOOKS[ctrlState.bibleBook-1]:BIBLE_BOOKS[ctrlState.bibleBook-1].n;
     var ref=bookName+' '+ctrlState.bibleChapter+':'+vn+' ('+ctrlState.bibleVersion+')';
@@ -4927,6 +4987,10 @@
     var isTamil=TAMIL_VERSIONS.indexOf(ctrlState.bibleVersion)>-1;
     document.getElementById('ctrl-book-label').textContent=isTamil?TAMIL_BOOKS[ctrlState.bibleBook-1]:BIBLE_BOOKS[ctrlState.bibleBook-1].n;
     document.getElementById('ctrl-ch-label').textContent=ctrlState.bibleChapter;
+    // Runs on every selection change (picker / recent-verse replay) and once from init().
+    saveControllerState('cast_bible_version',ctrlState.bibleVersion);
+    saveControllerState('cast_bible_book',ctrlState.bibleBook);
+    saveControllerState('cast_bible_chapter',ctrlState.bibleChapter);
   }
 
   // ============================================================
@@ -4949,6 +5013,7 @@
     initPreviewFrame();
     loadDataFromStorage();
     loadSongBooksFromStorage();
+    restoreControllerState();
     renderCtrlSongsPage();
     updateBibleSelLabels();
     loadCtrlBible();

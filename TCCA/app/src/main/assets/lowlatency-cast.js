@@ -16,7 +16,6 @@
 (function () {
   'use strict';
 
-  var URL_KEY = 'directObsUrl';
   var bridge = window.LowLatencyCast;          // undefined in a desktop browser / old build
   var $ = function (id) { return document.getElementById(id); };
 
@@ -44,7 +43,6 @@
     var input = $('obs-stream-url');
     var url = (input ? input.value : '').trim();
     if (!url) { setStatus('Enter the OBS stream URL first', 'error'); return; }
-    try { localStorage.setItem(URL_KEY, url); } catch (e) { /* storage may be unavailable */ }
     setBusy(true);
     setStatus('Starting…', 'connecting');
     // Returns false when the URL was rejected up-front; the reason is delivered via onDirectStreamStatus.
@@ -62,11 +60,8 @@
   }
 
   function init() {
-    var input = $('obs-stream-url'), startBtn = $('obs-stream-start'), stopBtn = $('obs-stream-stop');
-    if (input) {
-      // Keep the markup's default URL unless the user has previously entered their own.
-      try { var saved = localStorage.getItem(URL_KEY); if (saved) input.value = saved; } catch (e) { /* ignore */ }
-    }
+    // The OBS URL is saved/restored by controller.html (cast_obs_url) — not here.
+    var startBtn = $('obs-stream-start'), stopBtn = $('obs-stream-stop');
     if (startBtn) startBtn.addEventListener('click', start);
     if (stopBtn) stopBtn.addEventListener('click', backToPresentation);
     if (!bridge) setStatus('Direct streaming unavailable', 'error');
